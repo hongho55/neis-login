@@ -1,0 +1,38 @@
+# Build products
+*.exe
+*.dll
+*.pdb
+*.zip
+/bin/
+/obj/
+/.vs/
+
+# Local settings, credentials, certificates and runtime diagnostics
+settings.json
+settings.json.tmp
+status.json
+installation-check.json
+events.log
+*.log
+*.lnk
+*.pfx
+*.p12
+*.p7b
+*.cer
+*.der
+*.key
+*.pem
+*.user
+*.suo
+.env
+.env.*
+
+# One-off local work and artifacts
+/work/
+/outputs/
+*-audit.json
+*-trial*.json
+
+# OS metadata
+Thumbs.db
+Desktop.ini
