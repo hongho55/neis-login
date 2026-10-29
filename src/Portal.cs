@@ -16,13 +16,19 @@ internal sealed class BrowserTab {internal IntPtr Hwnd;internal AutomationElemen
 internal static class Portal {
  internal const string Origin="https://gwe.eduptl.kr";
  internal const string LoginPath="/bpm_lgn_lg00_001.do",MainPath="/bpm_man_mn00_001.do";
- internal static volatile bool Cancelled;
+ static readonly OperationSafety operation=new OperationSafety();
+ internal static bool Cancelled {get{return operation.Cancelled;}}
+ internal static void BeginOperation(){operation.Begin();}
+ internal static bool RequestStop(){return operation.RequestStop();}
+ internal static void Input(Action persistPending,Action input){operation.Input(persistPending,input);}
+ internal static void SubmitOnce(Action dispatch){operation.Submit(dispatch);}
  internal static Action<string> Report=s=>{};
+ internal static Action<string> Milestone=s=>{};
  internal static IntPtr ReturnWindowHint,HelperWindow;
  static IntPtr workWindow;static uint workProcess;static string workProfile,workPortalTabKey;
- static bool launchRequested;static HashSet<IntPtr> beforeLaunch;
+ static readonly WindowLaunchState launch=new WindowLaunchState();
  static ForegroundReturn focusReturn;
- internal static void CheckCancel(){if(Cancelled)throw new SafeFailure("사용자 요청으로 중단했습니다. 자동으로 다시 제출하지 않습니다.");}
+ internal static void CheckCancel(){operation.Check();}
  internal static List<AutomationElement> All(AutomationElement e,ControlType t){return e.FindAll(TreeScope.Descendants,new PropertyCondition(AutomationElement.ControlTypeProperty,t)).Cast<AutomationElement>().ToList();}
  internal static AutomationElement Id(AutomationElement e,string id){return e.FindFirst(TreeScope.Descendants,new PropertyCondition(AutomationElement.AutomationIdProperty,id));}
  internal static List<Tuple<IntPtr,AutomationElement>> Windows(){
@@ -51,17 +57,21 @@ internal static class Portal {
  static void EnsureWindow(string profile,bool allowCreate){
   CheckCancel();if(workProfile!=profile||BoundWindow()==null){
    if(!allowCreate)throw new SafeFailure("업무 전용 창이 닫혔거나 바뀌었어요. 새 창에서 자동으로 재시도하지 않습니다.");
-   if(workProfile!=profile||!launchRequested){
-    // Existing browser windows are excluded, even when they contain portal tabs.
-    workProfile=profile;workWindow=IntPtr.Zero;workPortalTabKey=null;beforeLaunch=new HashSet<IntPtr>(Windows().Select(w=>w.Item1));launchRequested=true;
-    Report("업무 전용 Edge 창을 열고 있어요.");Launch(profile);
-   }
-   var found=Wait(()=>{
-    var windows=Windows();var candidates=windows.Where(w=>All(w.Item2,ControlType.TabItem).Any(IsPortalTab)).ToList();
-    IntPtr chosen=WindowFlow.NewWindow(candidates.Select(w=>w.Item1),beforeLaunch);
-    return chosen==IntPtr.Zero?null:candidates.Single(w=>w.Item1==chosen);
-   },30000,"업무 전용 새 창을 확인하지 못했어요. 기존 창에 대신 입력하거나 창을 반복해서 열지 않았습니다.");
-   workWindow=found.Item1;Native.GetWindowThreadProcessId(workWindow,out workProcess);launchRequested=false;
+   if(workProfile!=profile)launch.Reset();
+   launch.PrepareExplicitRetry(Windows().Select(w=>w.Item1));
+   try{
+    if(!launch.Pending){
+     // Existing browser windows are excluded; a failed request is only retried explicitly.
+     workProfile=profile;workWindow=IntPtr.Zero;workPortalTabKey=null;launch.Begin(Windows().Select(w=>w.Item1));
+     Report("업무 전용 Edge 창을 열고 있어요.");Launch(profile);
+    }
+    var found=Wait(()=>{
+     var windows=Windows();var candidates=windows.Where(w=>All(w.Item2,ControlType.TabItem).Any(IsPortalTab)).ToList();
+     IntPtr chosen=WindowFlow.NewWindow(candidates.Select(w=>w.Item1),launch.Before);
+     return chosen==IntPtr.Zero?null:candidates.Single(w=>w.Item1==chosen);
+    },30000,"새 업무 창이 준비되지 않았어요. 요청 창이 남아 있으면 닫힌 뒤 업무 시작을 다시 눌러 주세요. 자동으로 창을 반복 생성하지 않습니다.");
+    workWindow=found.Item1;Native.GetWindowThreadProcessId(workWindow,out workProcess);launch.Reset();
+   }catch{launch.MarkFailed();throw;}
   }
   if(focusReturn!=null){focusReturn.Own(workWindow);focusReturn.TryReturn();}
  }
@@ -167,7 +177,7 @@ internal static class Portal {
  internal static void BindProbeWindow(Settings s,long hwnd){
   IntPtr handle=new IntPtr(hwnd);var target=Windows().SingleOrDefault(w=>w.Item1==handle);
   if(target==null)throw new SafeFailure("검사에서 지정한 Edge 창이 없어졌어요. 다른 창으로 바꾸지 않습니다.");
-  workWindow=handle;Native.GetWindowThreadProcessId(handle,out workProcess);workProfile=s.Profile;workPortalTabKey=null;launchRequested=false;
+  workWindow=handle;Native.GetWindowThreadProcessId(handle,out workProcess);workProfile=s.Profile;workPortalTabKey=null;launch.Reset();
   var c=Locate(s.Profile);if(c==null)throw new SafeFailure("검사 대상 창의 포털 HTTPS 문서를 확인하지 못했어요.");Validate(c,c.Path,false);
  }
  internal static object ProbeBackground(Settings s){
@@ -208,11 +218,10 @@ internal static class Portal {
    if(Native.GetForegroundWindow()==c.Hwnd)throw new SafeFailure("업무 창이 전면으로 바뀌어 백그라운드 시험을 중단했어요. 반복 입력하지 않습니다.");
    if(!Automation.Compare(password,Password(c))||value.Current.IsReadOnly)throw new SafeFailure("보호된 입력 요소가 바뀌어 중단했어요.");
   };
-  guard();s.PendingAttempt=true;s.Save();AppState.Record("BACKGROUND_INPUT_STARTED");
-  Vault.SetDirect(s.Target,secret=>value.SetValue(secret),guard);guard();
+  guard();Input(()=>{s.PendingAttempt=true;s.Save();},()=>{AppState.Record("BACKGROUND_INPUT_STARTED");Vault.SetDirect(s.Target,secret=>value.SetValue(secret),guard);guard();});
   AppState.Record("BACKGROUND_INPUT_SET");Report("백그라운드 직접 입력 완료. 전면화·키보드 입력 없음.");
   // No retries, no input-method fallback, and no read-back of the password value.
-  ((InvokePattern)submitPattern).Invoke();AppState.Record("BACKGROUND_SUBMITTED_ONCE");Report("확인 버튼 직접 실행 1회. 응답 확인 중.");
+  SubmitOnce(()=>((InvokePattern)submitPattern).Invoke());AppState.Record("BACKGROUND_SUBMITTED_ONCE");Report("확인 버튼 직접 실행 1회. 응답 확인 중.");
   bool backgroundAfterSubmit=Native.GetForegroundWindow()!=c.Hwnd;
   c=Wait(()=>{var x=Locate(s.Profile);return x!=null&&x.Path==MainPath&&Id(x.Doc,"btn-logout")!=null?x:null;},45000,"직접 입력 후 로그인 성공을 확인하지 못했어요. 재입력·재제출하지 않았습니다.");
   Validate(c,MainPath,false);s.PendingAttempt=false;s.Verified=true;s.Save();AppState.Record("BACKGROUND_LOGIN_SUCCESS");
@@ -255,9 +264,8 @@ internal static class Portal {
   }
   Action guard=()=>{CheckCancel();Validate(c,LoginPath,false);ConfirmSelectedCertificate(c,s);if(!Automation.Compare(password,Password(c))||value.Current.IsReadOnly||!password.Current.IsEnabled)throw new SafeFailure("암호 입력 대상 또는 인증서가 바뀌었습니다. 재입력하지 않습니다.");};
   try{
-   guard();s.PendingAttempt=true;s.Save();AppState.Record("DIRECT_FOREGROUND_INPUT_STARTED");
-   Vault.SetDirect(s.Target,secret=>value.SetValue(secret),guard);guard();
-   AppState.Record("DIRECT_FOREGROUND_SUBMIT_ONCE");((InvokePattern)confirmation).Invoke();
+   guard();Input(()=>{s.PendingAttempt=true;s.Save();},()=>{AppState.Record("DIRECT_FOREGROUND_INPUT_STARTED");Vault.SetDirect(s.Target,secret=>value.SetValue(secret),guard);guard();});
+   SubmitOnce(()=>{AppState.Record("DIRECT_FOREGROUND_SUBMIT_ONCE");((InvokePattern)confirmation).Invoke();});
   }finally{if(focusReturn!=null)focusReturn.TryReturn();}
   Report("로그인 응답 확인 중 · 자동으로 다시 제출하지 않습니다.");
   c=Wait(()=>{var x=Locate(s.Profile);return x!=null&&x.Path==MainPath&&Id(x.Doc,"btn-logout")!=null?x:null;},45000,"로그인 성공을 확인하지 못했습니다. 재입력·재제출하지 않습니다. 오류 상태를 확인해 주세요.");
@@ -265,6 +273,7 @@ internal static class Portal {
  }
  static bool RunCore(Settings s,bool test,bool direct){
   var c=EnsurePortal(s.Profile,false);Validate(c,c.Path,false);
+  Milestone("EDGE_READY");
   if(c.Path==MainPath){if(test)throw new SafeFailure("이미 로그인되어 있어 암호 자동 입력을 검증할 수 없습니다. 직접 로그아웃한 뒤 시험해 주세요.");Report("기존 로그인 세션 확인");}
   else {
    if(s.PendingAttempt)throw new SafeFailure("이전 입력 결과가 확인되지 않았습니다. 자동 재시도하지 않습니다. 화면을 확인한 뒤 앱에서 오류 상태를 초기화해 주세요.");
@@ -272,6 +281,7 @@ internal static class Portal {
    DateTime expiry;if(!DateTime.TryParse(s.CertExpiry,out expiry)||expiry.Date<DateTime.Today)throw new SafeFailure("등록한 인증서 유효기간을 확인해 주세요.");
    c=Prepare(s.Profile,false);
    c=WaitRegisteredCertificate(s,c);
+   Milestone("CERTIFICATE_READY");
    if(direct)AuthenticateDirect(s,c);
    else {
    Report("암호 입력·제출 동안 업무 창을 잠시 앞으로 가져옵니다.");c=EnsurePortal(s.Profile,true,false);Validate(c,LoginPath,true);
@@ -279,16 +289,16 @@ internal static class Portal {
    c=Wait(()=>Locate(s.Profile),5000,"업무포털 대상이 바뀌었습니다.");Validate(c,LoginPath,true);ConfirmSelectedCertificate(c,s);
    var password=Password(c);password.SetFocus();Thread.Sleep(150);
    Action guard=()=>{CheckCancel();if(Native.GetForegroundWindow()!=c.Hwnd)throw new SafeFailure("암호 입력 중 활성 창이 바뀌었습니다. 즉시 중단했습니다.");var focused=AutomationElement.FocusedElement;if(!Automation.Compare(focused,password)||!focused.Current.IsPassword)throw new SafeFailure("암호 입력 대상의 포커스가 바뀌었습니다. 즉시 중단했습니다.");};
-   Validate(c,LoginPath,true);guard();s.PendingAttempt=true;s.Save();Report("대상·인증서 확인 완료. 저장 암호를 로컬에서 입력 중");
-   Vault.TypeInto(s.Target,guard);guard();Validate(c,LoginPath,true);ConfirmSelectedCertificate(c,s);
+   Validate(c,LoginPath,true);guard();Input(()=>{s.PendingAttempt=true;s.Save();},()=>{Report("대상·인증서 확인 완료. 저장 암호를 로컬에서 입력 중");Vault.TypeInto(s.Target,guard);guard();});Validate(c,LoginPath,true);ConfirmSelectedCertificate(c,s);
    var buttons=All(Dialog(c),ControlType.Button).Where(e=>e.Current.Name=="확인"&&!e.Current.IsOffscreen&&e.Current.IsEnabled).ToList();
    if(buttons.Count!=1)throw new SafeFailure("확인 버튼을 하나로 찾지 못했습니다. 제출하지 않습니다.");
-   Report("로그인 1회 제출. 응답 확인 중");Native.Click(buttons[0],c.Hwnd);
+   SubmitOnce(()=>{Report("로그인 1회 제출. 응답 확인 중");Native.Click(buttons[0],c.Hwnd);});
    if(focusReturn!=null)focusReturn.TryReturn();
    c=Wait(()=>{var x=Locate(s.Profile);return x!=null&&x.Path==MainPath&&Id(x.Doc,"btn-logout")!=null?x:null;},45000,"로그인 성공을 확인하지 못했습니다. 입력 불허·암호 오류·응답 지연 등은 화면에서 구분해 주세요. 재제출하지 않았습니다.");
    Validate(c,MainPath,false);s.PendingAttempt=false;s.Verified=true;s.Save();Report("암호 자동 입력 및 업무포털 로그인 성공");
    }
   }
+  Milestone("LOGIN_COMPLETE");
   if(s.OpenNeis)OpenSystem(s,"나이스","gwe.neis.go.kr","/jsp/main.jsp");
   if(s.OpenKedu)OpenSystem(s,"K-에듀파인","klef.gwe.go.kr","/keris_ui/main.do");
   Report("완료: 업무포털과 선택한 시스템 초기 화면 확인");return true;

@@ -61,15 +61,16 @@ internal sealed class StrictSession:IDisposable {
  }
  void VerifyDom(){Stage("VERIFY_DOM_CERTIFICATE_SELECTION");context=Current();Portal.ConfirmSelectedCertificate(context,settings);selected=true;selectionMethod="DOM semantic selection + UIA verification";Done(selectionMethod);}
  void Login(){
+  OperationSafety.RequireResolved(settings.PendingAttempt);
   if(attempted||!freshDialog||!selected)throw new SafeFailure("새 인증서창과 선택 확인이 필요하며 로그인은 한 번만 시도합니다.");
   context=Current();Portal.Validate(context,Portal.LoginPath,false);Portal.ConfirmSelectedCertificate(context,settings);
   DateTime expiry;if(!DateTime.TryParse(settings.CertExpiry,out expiry)||expiry.Date<DateTime.Today)throw new SafeFailure("인증서 유효기간을 확인해 주세요.");
   var password=Portal.Password(context);object p;if(!password.TryGetCurrentPattern(ValuePattern.Pattern,out p)||((ValuePattern)p).Current.IsReadOnly)throw new SafeFailure("암호칸 직접 입력을 사용할 수 없어요.");var value=(ValuePattern)p;
   var confirm=Button(context,"확인");object confirmPattern;if(!confirm.TryGetCurrentPattern(InvokePattern.Pattern,out confirmPattern))throw new SafeFailure("확인 버튼에 InvokePattern이 없습니다.");
   Action guard=()=>{audit.AssertBackground();Portal.Validate(context,Portal.LoginPath,false);Portal.ConfirmSelectedCertificate(context,settings);if(!Automation.Compare(password,Portal.Password(context))||value.Current.IsReadOnly)throw new SafeFailure("보호된 입력 대상이 변경됐어요.");};
-  guard();Stage("PASSWORD_DIRECT_SET");attempted=true;settings.PendingAttempt=true;settings.Save();Save();
-  Vault.SetDirect(settings.Target,secret=>value.SetValue(secret),guard);Done("ValuePattern.SetValue; no read-back");
-  Stage("CONFIRM_INVOKE");guard();submissions=1;Save();((InvokePattern)confirmPattern).Invoke();Done("InvokePattern.Invoke once");
+  guard();Stage("PASSWORD_DIRECT_SET");attempted=true;
+  Portal.Input(()=>{settings.PendingAttempt=true;settings.Save();Save();},()=>Vault.SetDirect(settings.Target,secret=>value.SetValue(secret),guard));Done("ValuePattern.SetValue; no read-back");
+  Stage("CONFIRM_INVOKE");guard();Portal.SubmitOnce(()=>{submissions=1;Save();((InvokePattern)confirmPattern).Invoke();});Done("InvokePattern.Invoke once");
   Stage("LOGIN_RESPONSE");context=Portal.Wait(()=>{audit.AssertBackground();var c=Current();return c.Path==Portal.MainPath&&Portal.Id(c.Doc,"btn-logout")!=null?c:null;},45000,"로그인 성공을 확인하지 못했어요. 재입력·재제출하지 않습니다.");
   Portal.Validate(context,Portal.MainPath,false);login=true;settings.PendingAttempt=false;settings.Verified=true;settings.Save();Done("HTTPS main + logout marker");
  }
