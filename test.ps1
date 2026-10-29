@@ -4,7 +4,7 @@ $testOutput = Join-Path $PSScriptRoot 'bin\tests'
 New-Item -ItemType Directory -Path $testOutput -Force | Out-Null
 $arguments = @('/nologo','/target:exe','/platform:x64','/langversion:5','/define:CONSOLE','/main:RegressionTests',('/out:' + (Join-Path $testOutput 'RegressionTests.exe')))
 foreach ($library in @('UIAutomationClient','UIAutomationTypes','WindowsBase','PresentationCore','PresentationFramework','WindowsFormsIntegration')) { $arguments += '/reference:' + (Join-Path $framework ('WPF\' + $library + '.dll')) }
-$arguments += '/reference:System.Windows.Forms.dll','/reference:System.Drawing.dll','/reference:System.Web.Extensions.dll','/reference:System.Xaml.dll'
+$arguments += '/reference:System.Windows.Forms.dll','/reference:System.Drawing.dll','/reference:System.Web.Extensions.dll','/reference:System.Xaml.dll','/reference:Microsoft.CSharp.dll'
 $arguments += @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'src') -Filter '*.cs' | ForEach-Object FullName)
 $arguments += @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'tests') -Filter '*.cs' | ForEach-Object FullName)
 & (Join-Path $framework 'csc.exe') @arguments

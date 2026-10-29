@@ -81,7 +81,7 @@ internal sealed class MainWindow:Form {
  readonly Settings settings;readonly Action persistSelection;
  readonly Label status=new Label(),cert=new Label(),guideTitle=new Label(),guideText=new Label(),progress=new Label(),startupNote=new Label();
  readonly CheckBox neis=new CheckBox(),kedu=new CheckBox();
- readonly Button next=new Button(),back=new Button(),setup=new Button(),options=new Button(),stop=new Button(),enableStartup=new Button(),removeStartup=new Button();
+ readonly Button next=new Button(),back=new Button(),setup=new Button(),options=new Button(),stop=new Button(),enableStartup=new Button(),restoreStartup=new Button(),removeStartup=new Button();
  readonly Panel guide=new Panel();readonly Label hotkeyNote=new Label();bool busy,restoringSelection;string lastStatus="";SetupStep step;StopHotkeyWindow stopHotkey;
  internal MainWindow(Settings s,Action saveSelection=null){
   settings=s;persistSelection=saveSelection??s.Save;step=s.CertUser==""||!Vault.Exists(s.Target)?SetupStep.Welcome:(s.Verified?SetupStep.Ready:SetupStep.Registered);
@@ -98,8 +98,9 @@ internal sealed class MainWindow:Form {
   back.SetBounds(280,236,310,26);back.FlatStyle=FlatStyle.Flat;back.FlatAppearance.BorderSize=0;back.ForeColor=System.Drawing.Color.FromArgb(31,91,163);back.Click+=(o,e)=>{if(!busy){if(step==SetupStep.Certificate)OpenPortal();else BeginSetup();}};guide.Controls.Add(back);
   neis.Text="나이스 열기";neis.SetBounds(27,391,190,28);neis.Checked=s.OpenNeis;Controls.Add(neis);
   kedu.Text="K-에듀파인 열기";kedu.SetBounds(246,391,300,28);kedu.Checked=s.OpenKedu;Controls.Add(kedu);
-  enableStartup.Text="자동 시작 켜기";enableStartup.SetBounds(27,430,285,36);enableStartup.Click+=(o,e)=>ChangeStartup(true);Controls.Add(enableStartup);
-  removeStartup.Text="자동 시작 등록 삭제";removeStartup.SetBounds(326,430,309,36);removeStartup.Click+=(o,e)=>ChangeStartup(false);Controls.Add(removeStartup);
+  enableStartup.Text="빠른 자동 시작 켜기";enableStartup.SetBounds(27,430,199,36);enableStartup.Click+=(o,e)=>ChangeStartup(1);Controls.Add(enableStartup);
+  restoreStartup.Text="기존 방식으로 복원";restoreStartup.SetBounds(234,430,199,36);restoreStartup.Click+=(o,e)=>ChangeStartup(2);Controls.Add(restoreStartup);
+  removeStartup.Text="자동 시작 끄기";removeStartup.SetBounds(441,430,194,36);removeStartup.Click+=(o,e)=>ChangeStartup(0);Controls.Add(removeStartup);
   startupNote.SetBounds(27,476,605,40);startupNote.ForeColor=System.Drawing.Color.DimGray;Controls.Add(startupNote);
   cert.SetBounds(27,523,600,29);cert.ForeColor=System.Drawing.Color.DimGray;Controls.Add(cert);
   setup.SetBounds(24,564,238,32);setup.Click+=(o,e)=>{if(!busy){if(step==SetupStep.Welcome||step==SetupStep.Certificate){step=settings.CertUser==""?SetupStep.Welcome:(settings.Verified?SetupStep.Ready:SetupStep.Registered);UpdateGuide();}else BeginSetup();}};Controls.Add(setup);
@@ -130,17 +131,20 @@ internal sealed class MainWindow:Form {
  internal void BeginSetup(){if(busy)return;step=SetupStep.Welcome;UpdateGuide();SetStatus("안내에 따라 한 단계씩 진행해 주세요.");}
  void RefreshCertificate(){
   cert.Text=settings.CertUser==""?"인증서는 안내 2단계에서 등록합니다.":"등록된 인증서: "+settings.CertUser+"  ·  만료일 "+settings.CertExpiry;
-  bool registered=StartupRegistration.IsRegistered;bool hasEntry=StartupRegistration.HasEntry;
-  enableStartup.Text=registered?"자동 시작 켜짐":"자동 시작 켜기";enableStartup.Enabled=!busy&&!registered;removeStartup.Enabled=!busy&&hasEntry;
-  startupNote.Text=registered?(settings.PendingAttempt?"자동 시작 켜짐 · 로그인 오류 확인 전에는 도우미만 열려요.":(settings.Verified?"자동 시작 켜짐 · Windows 로그인 후 업무를 시작해요.":"자동 시작 켜짐 · 처음 설정을 마치면 자동 로그인해요.")):(hasEntry?"기존 등록 또는 확인이 필요한 바로가기가 있어요. 등록 삭제로 정리하세요.":"자동 시작 꺼짐 · 켜기 버튼을 누를 때만 등록해요.");
+  bool normal=StartupRegistration.IsRegistered,fast=false,task=false,unknown=false;
+  try{var controller=Autostart.Controller;fast=controller.IsFast;task=controller.HasTask;}catch(Exception){unknown=true;}
+  bool registered=normal||fast,hasEntry=StartupRegistration.HasEntry||task;
+  enableStartup.Text=fast?"빠른 자동 시작 켜짐":"빠른 자동 시작 켜기";enableStartup.Enabled=!busy&&(!fast||normal);
+  restoreStartup.Text=normal&&!fast?"기존 자동 시작 켜짐":"기존 방식으로 복원";restoreStartup.Enabled=!busy&&(!normal||fast);removeStartup.Enabled=!busy&&(hasEntry||unknown);
+  startupNote.Text=unknown?"예약 작업 상태 확인 실패 · 기존 등록을 임의로 변경하지 않습니다.":(normal&&fast?"두 방식이 등록돼 있어요. 원하는 방식 버튼으로 정리해 주세요.":(registered?((fast?"빠른 자동 시작 켜짐":"기존 자동 시작 켜짐")+(settings.PendingAttempt?" · 미확인 입력은 자동 재시도하지 않아요.":" · Windows 로그인 후 업무를 시작해요.")):(hasEntry?"기존 등록 또는 확인이 필요한 항목이 있어요.":"자동 시작 꺼짐 · 켜기 버튼을 누를 때만 등록해요.")));
  }
- void ChangeStartup(bool enabled){if(busy)return;try{
-  if(enabled){AppState.Install();StartupRegistration.Enable();}
-  else StartupRegistration.Remove();
-  settings.StartAtLogon=StartupRegistration.IsRegistered;settings.Save();AppState.Record(enabled?"STARTUP_ENABLED_BY_USER":"STARTUP_REMOVED_BY_USER");SetStatus(enabled?"자동 시작을 켰어요. 실제 재로그온 시험은 편한 시점에 직접 해 주세요.":"자동 시작 등록을 삭제했어요. 저장한 암호와 인증서는 그대로예요.");
+ void ChangeStartup(int mode){if(busy)return;try{
+  AppState.Install();var controller=Autostart.Controller;
+  if(mode==1)controller.Enable();else if(mode==2)controller.Restore();else controller.Remove();
+  settings.StartAtLogon=Autostart.IsRegistered;settings.Save();AppState.Record(mode==1?"FAST_STARTUP_ENABLED_BY_USER":(mode==2?"STARTUP_RESTORED_BY_USER":"STARTUP_REMOVED_BY_USER"));SetStatus(mode==1?"로그온 예약 작업으로 전환했어요. 다음 재로그온 때 시작 속도를 직접 확인해 주세요.":(mode==2?"기존 Startup 방식으로 복원했어요.":"자동 시작을 껐어요. 저장한 암호와 인증서는 그대로예요."));
  }catch(SafeFailure ex){SetStatus(ex.Message);}catch(Exception){SetStatus("자동 시작 변경을 완료하지 못했어요. 보안제품 알림과 실제 등록 상태를 확인해 주세요.");}finally{RefreshCertificate();}}
  void CaptureSettings(){SelectionPreferences.Save(settings,neis.Checked,kedu.Checked,persistSelection);}
- void Work(Action action,Action completed=null){if(busy)return;try{CaptureSettings();}catch(Exception){SetStatus("선택과 필수 상태를 저장하지 못해 작업을 시작하지 않았습니다.");return;}Portal.BeginOperation();busy=true;foreach(var b in new[]{next,back,setup,options,enableStartup,removeStartup})b.Enabled=false;neis.Enabled=kedu.Enabled=false;
+ void Work(Action action,Action completed=null){if(busy)return;try{CaptureSettings();}catch(Exception){SetStatus("선택과 필수 상태를 저장하지 못해 작업을 시작하지 않았습니다.");return;}Portal.BeginOperation();busy=true;foreach(var b in new[]{next,back,setup,options,enableStartup,restoreStartup,removeStartup})b.Enabled=false;neis.Enabled=kedu.Enabled=false;
   var worker=new System.ComponentModel.BackgroundWorker();worker.DoWork+=(o,e)=>action();worker.RunWorkerCompleted+=(o,e)=>{busy=false;foreach(var b in new[]{next,back,setup,options})b.Enabled=true;neis.Enabled=kedu.Enabled=true;RefreshCertificate();if(e.Error!=null){AppState.Record("STOPPED");SetStatus(e.Error is SafeFailure?e.Error.Message:"작업을 진행하지 못했어요. 화면을 확인한 뒤 다시 시작해 주세요.");}else{if(completed!=null)completed();SetStatus(lastStatus);}};worker.RunWorkerAsync();
  }
  void ExplainCertificateStep(bool loggedIn){
@@ -188,7 +192,7 @@ internal static class Program {
    Console.OutputEncoding=new UTF8Encoding(false);
    #endif
    if(args.Contains("--self-test")){if(Marshal.SizeOf(typeof(Native.INPUT))!=40)throw new SafeFailure("Windows 입력 구조체 크기가 맞지 않습니다.");Vault.SelfTest();Console.WriteLine("PASS: x64 input structure; random credential round-trip, local direct setter, guards and cleanup; no secret printed");return 0;}
-   if(args.Contains("--status")){var s=Settings.Load();Console.WriteLine(new JavaScriptSerializer().Serialize(new {registered=s.CertUser!=""&&Vault.Exists(s.Target),verified=s.Verified,pending=s.PendingAttempt,startAtLogon=StartupRegistration.IsRegistered,legacyStartup=StartupRegistration.LegacyPresent}));return 0;}
+   if(args.Contains("--status")){var s=Settings.Load();Console.WriteLine(new JavaScriptSerializer().Serialize(new {registered=s.CertUser!=""&&Vault.Exists(s.Target),verified=s.Verified,pending=s.PendingAttempt,startAtLogon=Autostart.IsRegistered,fastStartup=Autostart.Controller.IsFast,legacyStartup=StartupRegistration.LegacyPresent}));return 0;}
    using(var lease=new InstanceLease("Local\\TeacherWorkStart-"+System.Security.Principal.WindowsIdentity.GetCurrent().User.Value)){
     if(!lease.Owned){
      const string duplicate="업무 시작 도우미가 이미 실행 중입니다. 기존 도우미를 완전히 종료한 뒤 다시 실행·업데이트해 주세요.";
@@ -204,7 +208,7 @@ internal static class Program {
     var migrated=new JavaScriptSerializer().Deserialize<Settings>(File.ReadAllText(args[1],Encoding.UTF8));
     bool credentialAvailable=migrated.CertUser!=""&&Vault.Exists(migrated.Target);
     if(!credentialAvailable)migrated.Verified=false;
-    migrated.StartAtLogon=StartupRegistration.IsRegistered;migrated.Save();string installed=AppState.Install();
+    migrated.StartAtLogon=Autostart.IsRegistered;migrated.Save();string installed=AppState.Install();
     File.WriteAllText(Path.Combine(Settings.Root,"installation-check.json"),new JavaScriptSerializer().Serialize(new {unpackaged=true,credentialAvailable=credentialAvailable,verified=migrated.Verified,exe=installed,startupRegistered=StartupRegistration.IsRegistered}),new UTF8Encoding(false));
     lease.Release();Process.Start(new ProcessStartInfo(installed,"--show"){UseShellExecute=true});return 0;
    }
@@ -220,7 +224,10 @@ internal static class Program {
     if(args.Contains("--prepare")){var c=Portal.Prepare(settings.Profile);foreach(var cert in Portal.Certificates(c))Console.WriteLine(cert.ToString());AppState.Record("PREPARED");return 0;}
     if(args.Contains("--run-once")){bool testing=args.Contains("--test");Portal.Report=msg=>Console.WriteLine(msg);AppState.Record(testing?"TEST_STARTED":"RUN_STARTED");Portal.Run(settings,testing);AppState.Record(testing?"TEST_SUCCESS":"RUN_SUCCESS");return 0;}
     if(args.Contains("--run-legacy-once")){Portal.Report=msg=>Console.WriteLine(msg);Portal.Run(settings,args.Contains("--test"),false);return 0;}
-    if(args.Contains("--uninstall-startup")){StartupRegistration.Remove();settings.StartAtLogon=false;settings.Save();return 0;}
+    if(args.Contains("--enable-fast-startup")||args.Contains("--restore-startup")||args.Contains("--uninstall-startup")){
+     var controller=Autostart.Controller;if(args.Contains("--enable-fast-startup"))controller.Enable();else if(args.Contains("--restore-startup"))controller.Restore();else controller.Remove();
+     settings.StartAtLogon=Autostart.IsRegistered;settings.Save();AppState.Record(args.Contains("--enable-fast-startup")?"FAST_STARTUP_ENABLED_BY_USER":(args.Contains("--restore-startup")?"STARTUP_RESTORED_BY_USER":"STARTUP_REMOVED_BY_USER"));Console.WriteLine("AUTOSTART_CONFIGURATION_UPDATED");return 0;
+    }
     if(args.Contains("--auto"))AppState.Record("AUTO_LAUNCHED");
     Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
     bool setup=args.Contains("--register")||args.Contains("--register-only")||args.Contains("--setup");

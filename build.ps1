@@ -5,7 +5,7 @@ $arguments = @('/nologo', '/target:winexe', '/platform:x64', '/optimize+', ('/ou
 foreach ($library in @('UIAutomationClient', 'UIAutomationTypes', 'WindowsBase', 'PresentationCore', 'PresentationFramework', 'WindowsFormsIntegration')) {
   $arguments += '/reference:' + (Join-Path $framework ('WPF\' + $library + '.dll'))
 }
-$arguments += '/reference:System.Windows.Forms.dll', '/reference:System.Drawing.dll', '/reference:System.Web.Extensions.dll', '/reference:System.Xaml.dll'
+$arguments += '/reference:System.Windows.Forms.dll', '/reference:System.Drawing.dll', '/reference:System.Web.Extensions.dll', '/reference:System.Xaml.dll', '/reference:Microsoft.CSharp.dll'
 $arguments += @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'src') -Filter '*.cs' | ForEach-Object FullName)
 & $compiler @arguments
 if ($LASTEXITCODE -ne 0) { throw '빌드 실패' }

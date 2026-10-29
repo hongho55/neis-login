@@ -162,7 +162,7 @@ internal static class RegressionTests {
   if(args.Length==1&&args[0]=="--quiet-hidden-guide")return QuietModeTests.HiddenGuideChild();
   if(args.Length==4&&args[0]=="--lease-child"){using(var lease=new InstanceLease(args[1])){if(!lease.Owned)return 2;InstallFiles.CopyAtomic(args[2],args[3]);return 0;}}
   string temp=Path.GetFullPath(Path.GetTempPath());root=Path.GetFullPath(Path.Combine(temp,"TeacherWorkStart-Regression-"+Guid.NewGuid().ToString("N")));Directory.CreateDirectory(root);
-  try{Baseline();Cancellation();LaunchRecovery();LogsAndSettings();SelectionEvents();Hotkeys();Installation();StrictPending();QuietModeTests.Run(Check);Console.WriteLine("PASS "+count+" regression checks; no real credentials, browser login, user settings or Startup writes");return 0;}
+  try{Baseline();Cancellation();LaunchRecovery();LogsAndSettings();SelectionEvents();Hotkeys();Installation();StrictPending();QuietModeTests.Run(Check);FastStartupTests.Run(Check,root);Console.WriteLine("PASS "+count+" regression checks; no real credentials, browser login, user settings or Startup writes");return 0;}
   catch(Exception e){Console.WriteLine("FAIL: "+e.GetType().Name+" "+e.Message);return 1;}
   finally{if(root.StartsWith(temp.TrimEnd(Path.DirectorySeparatorChar)+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)&&Path.GetFileName(root).StartsWith("TeacherWorkStart-Regression-"))Directory.Delete(root,true);}
  }
