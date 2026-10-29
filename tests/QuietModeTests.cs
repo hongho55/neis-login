@@ -87,6 +87,10 @@ internal static class QuietModeTests {
   check(missing.Forms==1&&missing.Work==0&&missing.Notice.Contains("설정"),"quiet/incomplete setup opens guidance without work");
   var pendingResult=Execute(pending,s=>AutoRunEligibility.Check(s,()=>{throw new Exception("must not read credentials");}),(s,r)=>true);
   check(pendingResult.Forms==1&&pendingResult.Work==0&&pending.PendingAttempt,"quiet/pending preserved while showing guidance");
+  var manualState=new Settings{AutoRunAtLogon=false,PendingAttempt=true};int validated=0;
+  var manual=Execute(manualState,s=>{validated++;throw new Exception("manual mode must not validate credentials");},(s,r)=>{throw new Exception("manual mode must not start browser");});
+  check(manual.Forms==1&&manual.Work==0&&validated==0&&manual.Notice.Contains("직접"),"startup/program-only mode opens guidance without credential validation or browser work");
+  check(manualState.PendingAttempt&&!manualState.AutoRunAtLogon&&manual.Released,"startup/program-only mode preserves unresolved attempt and releases auto resources");
   var failed=Execute(Ready(),s=>null,(s,r)=>{throw new SafeFailure("INJECTED_WORK_FAILURE");});
   check(failed.Work==1&&failed.Forms==1&&failed.Notice.Contains("INJECTED_WORK_FAILURE")&&failed.Released,"quiet/error opens guidance after resource cleanup");
   check(!failed.Records.Contains("AUTO_SUCCESS"),"quiet/error never records success or retries");

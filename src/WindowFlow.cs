@@ -15,6 +15,7 @@ internal static class WindowFlow {
  }
 }
 
+internal enum ForegroundReturnOutcome { NO_ORIGINAL, ALREADY_ORIGINAL, USER_WINDOW_SELECTED, ORIGINAL_UNAVAILABLE, RESTORED, RESTORE_FAILED }
 internal sealed class ForegroundReturn {
  readonly IntPtr target;
  readonly HashSet<IntPtr> controlled=new HashSet<IntPtr>();
@@ -22,10 +23,16 @@ internal sealed class ForegroundReturn {
  readonly Func<IntPtr,bool> usable,activate;
  internal ForegroundReturn(IntPtr original,Func<IntPtr> getCurrent,Func<IntPtr,bool> canUse,Func<IntPtr,bool> setForeground){target=original;current=getCurrent;usable=canUse;activate=setForeground;}
  internal void Own(IntPtr hwnd){if(hwnd!=IntPtr.Zero&&hwnd!=target)controlled.Add(hwnd);}
- internal bool TryReturn(){
+ internal IntPtr Target {get{return target;}}
+ internal bool TryReturn(Action<ForegroundReturnOutcome> observed=null){
   // If the user has already switched to another app, preserve their choice.
   IntPtr foreground=current();
-  if(target==IntPtr.Zero||foreground==target||!controlled.Contains(foreground)||!usable(target))return false;
-  return activate(target);
+  ForegroundReturnOutcome reason;
+  if(target==IntPtr.Zero)reason=ForegroundReturnOutcome.NO_ORIGINAL;
+  else if(foreground==target)reason=ForegroundReturnOutcome.ALREADY_ORIGINAL;
+  else if(!controlled.Contains(foreground))reason=ForegroundReturnOutcome.USER_WINDOW_SELECTED;
+  else if(!usable(target))reason=ForegroundReturnOutcome.ORIGINAL_UNAVAILABLE;
+  else {bool result=activate(target);if(observed!=null)try{observed(result?ForegroundReturnOutcome.RESTORED:ForegroundReturnOutcome.RESTORE_FAILED);}catch(Exception){}return result;}
+  if(observed!=null)try{observed(reason);}catch(Exception){}return false;
  }
 }

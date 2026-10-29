@@ -48,7 +48,7 @@ internal static class Native {
   if(e.TryGetCurrentPattern(SelectionItemPattern.Pattern,out p)) {((SelectionItemPattern)p).Select();return;}
   System.Windows.Point point;
   if(!e.TryGetClickablePoint(out point))throw new SafeFailure("대상 요소에 클릭 위치가 없습니다. 요소를 찾은 것과 입력 가능 여부는 별도입니다.");
-  SetForegroundWindow(hwnd);
+  ForegroundTrace.Request(hwnd,FocusPoint.CLICK_REQUEST);
   if(GetForegroundWindow()!=hwnd)throw new SafeFailure("대상 Edge 창을 활성화하지 못했습니다.");
   if(!SetCursorPos((int)point.X,(int)point.Y))throw new SafeFailure("커서를 대상 위치로 옮기지 못했습니다. 클릭하지 않고 중단합니다.");
   if(!IsWindow(hwnd)||GetForegroundWindow()!=hwnd||e.Current.IsOffscreen||!e.Current.IsEnabled)throw new SafeFailure("클릭 직전 대상이 바뀌었습니다. 클릭하지 않습니다.");

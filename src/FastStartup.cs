@@ -7,7 +7,7 @@ using System.Runtime.InteropServices;
 
 internal sealed class LogonTaskRecord {internal string Xml;internal bool Enabled;internal int RunLevel,LogonType=3;}
 internal interface ILogonTaskStore {
- LogonTaskRecord Read();void CreateDisabled(string xml);void Enable(bool enabled);void Remove();
+ LogonTaskRecord Read();void CreateDisabled(string xml);void Update(string xml);void Enable(bool enabled);void Remove();
 }
 
 // Uses the Windows scheduler COM API in this user token. No shell, password or elevation.
@@ -25,6 +25,7 @@ internal sealed class WindowsLogonTaskStore:ILogonTaskStore {
   catch(COMException e){if(e.ErrorCode==unchecked((int)0x80070002))return null;throw;}finally{Release(principal);Release(definition);Release(task);}
  });}
  public void CreateDisabled(string xml){WithFolder<int>(folder=>{object task=null;try{task=folder.RegisterTask(name,xml,2,WindowsIdentity.GetCurrent().User.Value,null,3,null);return 0;}finally{Release(task);}});}
+ public void Update(string xml){WithFolder<int>(folder=>{object task=null;try{task=folder.RegisterTask(name,xml,4,WindowsIdentity.GetCurrent().User.Value,null,3,null);return 0;}finally{Release(task);}});}
  public void Enable(bool enabled){WithFolder<int>(folder=>{object task=null;try{task=folder.GetTask(name);((dynamic)task).Enabled=enabled;return 0;}finally{Release(task);}});}
  public void Remove(){WithFolder<int>(folder=>{folder.DeleteTask(name,0);return 0;});}
 }
@@ -32,10 +33,11 @@ internal sealed class WindowsLogonTaskStore:ILogonTaskStore {
 internal static class LogonTaskPolicy {
  internal const string Marker="TeacherWorkStart.FastStartup.v1";
  internal const string Namespace="http://schemas.microsoft.com/windows/2004/02/mit/task";
+ internal const string Delay="PT10S";
  internal static string Build(string sid,string executable){
   string user=SecurityElement.Escape(sid),exe=SecurityElement.Escape(executable),dir=SecurityElement.Escape(Path.GetDirectoryName(executable));
   return "<Task version=\"1.2\" xmlns=\""+Namespace+"\"><RegistrationInfo><Description>업무 시작 도우미 · 현재 사용자 로그온 · --auto</Description><Source>"+Marker+"</Source></RegistrationInfo>"+
-   "<Triggers><LogonTrigger><Enabled>true</Enabled><UserId>"+user+"</UserId><Delay>PT0S</Delay></LogonTrigger></Triggers>"+
+   "<Triggers><LogonTrigger><Enabled>true</Enabled><UserId>"+user+"</UserId><Delay>"+Delay+"</Delay></LogonTrigger></Triggers>"+
    "<Principals><Principal id=\"CurrentUser\"><UserId>"+user+"</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>"+
    "<Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>"+
    "<AllowHardTerminate>false</AllowHardTerminate><StartWhenAvailable>false</StartWhenAvailable><RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>"+
@@ -67,12 +69,17 @@ internal static class LogonTaskPolicy {
    doc.SelectNodes("/t:Task/t:Actions/*",ns).Count==1&&String.Equals(Value(doc,ns,"Actions/t:Exec/t:Command"),executable,StringComparison.OrdinalIgnoreCase)&&Value(doc,ns,"Actions/t:Exec/t:Arguments")=="--auto";
   }catch(XmlException){return false;}
  }
- internal static bool Valid(string xml,string sid,string executable){
+ internal static string WithDelay(string xml){
+  var doc=Parse(xml);var ns=Names(doc);var trigger=doc.SelectSingleNode("/t:Task/t:Triggers/t:LogonTrigger",ns);var delay=trigger.SelectSingleNode("t:Delay",ns);
+  if(delay==null){delay=doc.CreateElement("Delay",Namespace);trigger.AppendChild(delay);}delay.InnerText=Delay;return doc.OuterXml;
+ }
+ internal static bool Valid(string xml,string sid,string executable,bool allowImmediate=false){
   if(!Owned(xml,sid,executable))return false;
   try{
   var doc=Parse(xml);var ns=Names(doc);Func<string,string> value=p=>Value(doc,ns,p)??Default(p);
   string delay=value("Triggers/t:LogonTrigger/t:Delay");
-  return doc.SelectNodes("/t:Task/t:Triggers/*",ns).Count==1&&SameUser(value("Triggers/t:LogonTrigger/t:UserId"),sid)&&value("Triggers/t:LogonTrigger/t:Enabled")=="true"&&(delay==null||XmlConvert.ToTimeSpan(delay)==TimeSpan.Zero)&&
+  TimeSpan duration=delay==null?TimeSpan.Zero:XmlConvert.ToTimeSpan(delay);
+  return doc.SelectNodes("/t:Task/t:Triggers/*",ns).Count==1&&SameUser(value("Triggers/t:LogonTrigger/t:UserId"),sid)&&value("Triggers/t:LogonTrigger/t:Enabled")=="true"&&(duration==TimeSpan.FromSeconds(10)||(allowImmediate&&duration==TimeSpan.Zero))&&
    value("Principals/t:Principal/t:LogonType")=="InteractiveToken"&&value("Principals/t:Principal/t:RunLevel")=="LeastPrivilege"&&
    value("Settings/t:MultipleInstancesPolicy")=="IgnoreNew"&&value("Settings/t:DisallowStartIfOnBatteries")=="false"&&value("Settings/t:StopIfGoingOnBatteries")=="false"&&
    value("Settings/t:StartWhenAvailable")=="false"&&value("Settings/t:RunOnlyIfNetworkAvailable")=="false"&&value("Settings/t:RunOnlyIfIdle")=="false"&&value("Settings/t:WakeToRun")=="false"&&
@@ -107,12 +114,24 @@ internal sealed class FastStartupController {
  readonly ILogonTaskStore tasks;readonly StartupBackup startup;readonly string sid,exe;readonly Func<bool> legacy;readonly Action removeLegacy;
  internal FastStartupController(ILogonTaskStore store,StartupBackup source,string user,string executable,Func<bool> hasLegacy,Action clearLegacy=null){tasks=store;startup=source;sid=user;exe=executable;legacy=hasLegacy;removeLegacy=clearLegacy??StartupRegistration.RemoveLegacy;}
  LogonTaskRecord Checked(){var task=tasks.Read();if(task!=null&&!LogonTaskPolicy.Owned(task.Xml,sid,exe))throw new SafeFailure("같은 이름의 다른 예약 작업이 있어 변경하지 않았습니다.");return task;}
- bool Valid(LogonTaskRecord task){return task!=null&&task.RunLevel==0&&task.LogonType==3&&LogonTaskPolicy.Valid(task.Xml,sid,exe);}
- internal bool IsFast {get{var task=Checked();return Valid(task)&&task.Enabled;}}
+ bool Valid(LogonTaskRecord task,bool allowImmediate=false){return task!=null&&task.RunLevel==0&&task.LogonType==3&&LogonTaskPolicy.Valid(task.Xml,sid,exe,allowImmediate);}
+ internal bool IsFast {get{var task=Checked();return Valid(task,true)&&task.Enabled;}}
+ internal bool NeedsDelayUpdate {get{var task=Checked();return Valid(task,true)&&!Valid(task);}}
  internal bool HasTask {get{return tasks.Read()!=null;}}
+ void UpdateDelay(LogonTaskRecord original){
+  try{
+   tasks.Update(LogonTaskPolicy.WithDelay(original.Xml));var updated=Checked();
+   if(!Valid(updated)||updated.Enabled!=original.Enabled)throw new SafeFailure("예약 작업의 10초 지연 결과를 확인하지 못했습니다.");
+  }catch(Exception){
+   try{tasks.Update(original.Xml);var restored=Checked();if(!Valid(restored,true)||Valid(restored)||restored.Enabled!=original.Enabled)throw new InvalidOperationException();}
+   catch(Exception){throw new SafeFailure("10초 지연 적용과 원래 예약 작업 복원을 확인하지 못했습니다. 추가 등록하지 않았으니 예약 작업 상태를 확인해 주세요.");}
+   throw new SafeFailure("10초 지연을 적용하지 못해 원래 예약 작업으로 복원했습니다. 권한을 올리거나 자동 재시도하지 않습니다.");
+  }
+ }
  internal void Enable(){
   if(legacy())throw new SafeFailure("이전 Run 등록이 남아 있어 전환하지 않았습니다. 기존 자동 시작 등록 상태를 먼저 확인해 주세요.");
-  startup.Preflight();var original=Checked();if(original!=null&&!Valid(original))throw new SafeFailure("기존 예약 작업 설정이 바뀌어 덮어쓰지 않았습니다. 등록 상태를 확인해 주세요.");
+  startup.Preflight();var original=Checked();if(original!=null&&!Valid(original,true))throw new SafeFailure("기존 예약 작업 설정이 바뀌어 덮어쓰지 않았습니다. 등록 상태를 확인해 주세요.");
+  if(original!=null&&!Valid(original)){UpdateDelay(original);original=Checked();}
   if(original!=null&&original.Enabled&&!startup.Exists)return;
   bool created=original==null,suspended=false;
   try{
@@ -127,12 +146,6 @@ internal sealed class FastStartupController {
    throw new SafeFailure("빠른 자동 시작을 등록하지 못했습니다. 기존 Startup 등록은 유지·복원했으며 권한을 올리거나 자동 재시도하지 않습니다.\n원인: "+detail);
   }
  }
- internal void Restore(){
-  if(legacy())throw new SafeFailure("이전 Run 등록이 남아 있어 다른 시작 항목을 추가하지 않았습니다. 기존 등록 상태를 먼저 확인해 주세요.");
-  var task=Checked();startup.Preflight();
-  if(task!=null){tasks.Enable(false);var disabled=Checked();if(disabled!=null&&disabled.Enabled)throw new SafeFailure("예약 작업을 끄지 못해 기존 방식을 추가 등록하지 않았습니다.");}
-  startup.Restore();if(task!=null)tasks.Remove();
- }
  internal void Remove(){var task=Checked();if(task!=null){tasks.Enable(false);var disabled=Checked();if(disabled!=null&&disabled.Enabled)throw new SafeFailure("예약 작업을 끄지 못했습니다.");tasks.Remove();}startup.Remove();removeLegacy();}
 }
 
@@ -140,5 +153,5 @@ internal static class Autostart {
  internal static string TaskName {get{return "TeacherWorkStart-Logon-"+WindowsIdentity.GetCurrent().User.Value;}}
  internal static string BackupPath {get{return Path.Combine(Settings.Root,"startup-backup","업무 시작 도우미.lnk");}}
  internal static FastStartupController Controller {get{string sid=WindowsIdentity.GetCurrent().User.Value;return new FastStartupController(new WindowsLogonTaskStore(TaskName),new StartupBackup(StartupRegistration.ShortcutPath,BackupPath,StartupRegistration.Executable),sid,StartupRegistration.Executable,()=>StartupRegistration.LegacyPresent);}}
- internal static bool IsRegistered {get{return StartupRegistration.IsRegistered||Controller.IsFast;}}
+ internal static bool IsRegistered {get{return Controller.IsFast;}}
 }
