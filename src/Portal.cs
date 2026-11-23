@@ -68,12 +68,16 @@ internal static partial class Portal {
  internal static void Launch(string profile){
   RunTrace.Record(TraceEvent.EDGE_LAUNCH_REQUEST,TraceStage.EDGE_LAUNCH);
   string arguments=WindowFlow.LaunchArguments(profile,Origin+LoginPath);
-   string[] paths={
+  string exe=FindEdgeExecutable();if(exe==null)throw new SafeFailure("Microsoft Edge 설치 경로를 찾지 못했습니다.");
+  Process.Start(new ProcessStartInfo(exe,arguments){UseShellExecute=true});
+ }
+ // Fixed install locations only; the executable path is intentionally not configurable.
+ internal static string FindEdgeExecutable(){
+  string[] paths={
    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),"Microsoft","Edge","Application","msedge.exe"),
    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),"Microsoft","Edge","Application","msedge.exe")
   };
-  string exe=paths.FirstOrDefault(File.Exists);if(exe==null)throw new SafeFailure("Microsoft Edge 설치 경로를 찾지 못했습니다.");
-  Process.Start(new ProcessStartInfo(exe,arguments){UseShellExecute=true});
+  return paths.FirstOrDefault(File.Exists);
  }
  static Tuple<IntPtr,AutomationElement> BoundWindow(){
   if(workWindow==IntPtr.Zero)return null;uint pid;Native.GetWindowThreadProcessId(workWindow,out pid);

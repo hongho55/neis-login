@@ -62,7 +62,7 @@ internal sealed class AutoRunContext:ApplicationContext {
    };
    stopItem=new ToolStripMenuItem("중단",null,(o,a)=>RequestStop());
    settingsItem=new ToolStripMenuItem("설정 열기",null,(o,a)=>RequestSettings());
-   menu.Items.AddRange(new ToolStripItem[]{progress,new ToolStripSeparator(),stopItem,settingsItem});
+   menu.Items.AddRange(new ToolStripItem[]{progress,new ToolStripSeparator(),stopItem,settingsItem,new ToolStripMenuItem("진단 파일 만들기",null,(o,a)=>DiagnosticsAction.ShowFromMenu())});
    trayIcon=AppVisuals.CreateIcon();tray=new NotifyIcon{Icon=trayIcon,Text="업무 시작 도우미 · 자동 실행 준비",ContextMenuStrip=menu,Visible=services.TrayVisible};
    AppVisuals.OpenMenuOnClick(tray,menu);tray.DoubleClick+=(o,a)=>RequestSettings();hotkey=new StopHotkeyWindow(RequestStop);
    RunTrace.Record(TraceEvent.TRAY_READY);

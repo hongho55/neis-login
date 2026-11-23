@@ -66,6 +66,16 @@ Windows에 기본 포함된 .NET Framework 4.x MSBuild로 [TeacherWorkStart.cspr
 
 생성된 EXE와 해당 .exe.config는 같은 폴더에 둡니다. 기본 사용 방법은 [사용안내.txt](사용안내.txt)를 참고하세요. 소스에 포함된 TeacherWorkStart.exe.config는 .NET 런타임 선언이며 개인 설정 파일이 아닙니다.
 
+## 진단 파일
+
+문제가 생겼을 때 원인을 파악할 수 있도록 실행 기록을 한 파일로 모읍니다. 시계 옆 트레이 메뉴의 **진단 파일 만들기** 또는 명령줄 `TeacherWorkStart.Cli.exe --diagnostics-bundle [출력.zip]`로 만듭니다(경로를 생략하면 바탕화면). 이미 기록되던 실행별 JSONL(`%LOCALAPPDATA%\TeacherWorkStart\logs`, 최근 30회)을 읽어 다음을 계산합니다.
+
+- 로그인 시도 횟수와 성공·실패·중단·미완료, 성공률
+- 실패가 난 단계와 오류 유형
+- 성공한 실행의 단계별 대기 시간(중앙값·최대·횟수)과 최근 시도별 결과까지의 시간
+
+ZIP에는 `summary.txt`, `environment.json`(앱·Windows·Edge 버전, 설정 파일 사용 여부와 문제 개수, 등록·대기 상태 같은 참/거짓 값), 실행 기록, `events.log`, `status.json`만 들어갑니다. 허용한 파일 이름만 담으며 `settings.json`, 자격 증명, 인증서 이름·위치, 화면 내용, 주소는 읽지도 않습니다. 추가 방어로 각 파일에 사용자 프로필 경로·SID·사용자 이름이 들어 있으면 그 파일은 제외하고 요약에 이름을 남깁니다. 기존 ZIP은 덮어쓰지 않습니다. `portal.config.json`에 문제가 있으면 실행 기록에 `CONFIG_PROBLEMS`가 남고 `environment.json`에 내용이 표시됩니다.
+
 ## 포털 설정 파일(선택)
 
 기본값은 강원 업무포털(`gwe.eduptl.kr`)과 Edge(`msedge`)입니다. 다른 값이 필요하면 EXE 옆에 `portal.config.json`을 두면 됩니다. 예시는 [portal.config.example.json](portal.config.example.json)에 있습니다. 파일이 없으면 기본값을 그대로 씁니다.
@@ -86,7 +96,7 @@ Windows에 기본 포함된 .NET Framework 4.x MSBuild로 [TeacherWorkStart.cspr
 .\test.ps1
 ```
 
-현재 소스는 Windows에서 GUI·CLI 빌드와 322개 회귀 검사를 통과합니다. `.github/workflows/ci.yml`이 push·PR마다 같은 빌드와 검사를 실행합니다. 아래는 0.4.13 당시 확인 범위입니다. 진행 안내창의 실제 비활성 표시·업데이트, 중단·정리, 자동 시작 모드 저장 실패 복원과 기존 안전 검사를 확인했습니다. 안내창 표시 시험은 숨긴 테스트 창과 가짜 작업을 사용했으며 실제 인증서 로그인이나 재로그온 성공을 의미하지 않습니다.
+현재 소스는 Windows에서 GUI·CLI 빌드와 345개 회귀 검사를 통과합니다. `.github/workflows/ci.yml`이 push·PR마다 같은 빌드와 검사를 실행합니다. 아래는 0.4.13 당시 확인 범위입니다. 진행 안내창의 실제 비활성 표시·업데이트, 중단·정리, 자동 시작 모드 저장 실패 복원과 기존 안전 검사를 확인했습니다. 안내창 표시 시험은 숨긴 테스트 창과 가짜 작업을 사용했으며 실제 인증서 로그인이나 재로그온 성공을 의미하지 않습니다.
 
 이전 0.4.12에서는 실제 사용자 환경의 인증 시작 1회·로그인·두 시스템 초기 화면을 확인했고 인증서 버튼 준비 대기는 2.70초였습니다. 그 결과를 새 버전의 실제 로그인 성공으로 간주하지 않습니다. 로그온 예약 작업의 PT10S는 유지하며 Windows 재로그온 직후 반복 성공률과 흰 화면 원인은 별도 확인 대상입니다.
 
@@ -114,6 +124,8 @@ Windows에 기본 포함된 .NET Framework 4.x MSBuild로 [TeacherWorkStart.cspr
 | src/PortalProbe.cs | 암호를 읽지 않는 진단과 백그라운드 입력 시험 |
 | src/PortalSystems.cs | 공식 SSO 메뉴로 나이스·K-에듀파인 열기 |
 | src/PortalStorage.cs | 인증서 저장 위치(매체·드라이브) 선택 |
+| src/DiagnosticsBundle.cs | 실행 기록 요약(성공률·실패 단계·대기 시간)과 허용 목록 기반 진단 ZIP 생성 |
+| src/DiagnosticsAction.cs | 트레이 메뉴·`--diagnostics-bundle` 진입점, 환경 정보 수집 |
 | src/PortalConfig.cs | 선택적 `portal.config.json` 로드·검증, 포털 URL 허용 판정 |
 | src/Native.cs | Windows API, UIA 보조 기능, Windows 자격 증명 관리자 처리 |
 | src/StartupRegistration.cs | 사용자 버튼으로 Startup 바로가기 등록·삭제 |

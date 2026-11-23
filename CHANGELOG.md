@@ -5,7 +5,10 @@
 - CI: `.github/workflows/ci.yml`이 push·PR마다 빌드와 회귀 검사를 실행합니다.
 - 설정: 선택적 `portal.config.json`(`src/PortalConfig.cs`)으로 포털 호스트·경로, 브라우저 프로세스 이름, 대기 주기를 바꿀 수 있습니다. 잘못된 값은 기본값으로 되돌리며, https·443 포트·브라우저 실행 경로는 설정할 수 없습니다. 흩어져 있던 포털 URL 검사 4곳을 `PortalConfig.IsPortalUrl` 하나로 모았습니다.
 - 구조: `Portal.cs`를 단계별 partial 파일(`PortalCertificate`·`PortalRecovery`·`PortalAuth`·`PortalProbe`·`PortalSystems`)로 나누고, 200자를 넘던 긴 줄은 공백·줄바꿈만 바꿔 풀었습니다(변환 전후 토큰 동일성 검증).
-- 회귀 검사 322개(설정 검증 22개 추가)가 통과합니다.
+- 진단 파일: 트레이 메뉴 **진단 파일 만들기** 또는 `--diagnostics-bundle [출력.zip]`으로 기존 실행 기록(JSONL)을 요약(시도·성공률·실패 단계·단계별 대기 시간)하고 허용 목록 파일만 ZIP으로 묶습니다. 설정·자격 증명·인증서 정보는 읽지 않으며, 사용자 경로가 든 파일은 제외합니다. 새 기록 항목은 없습니다(기존 기록을 읽기만 함).
+- `portal.config.json`에 문제가 있으면 실행 기록에 `CONFIG_PROBLEMS` 이벤트를 남깁니다. 설정 문제 메시지에서는 예외 메시지(경로·내용이 섞일 수 있음)를 빼고 유형만 남깁니다.
+- Edge 설치 경로 탐색을 `Portal.FindEdgeExecutable`로 분리했습니다(동작 동일).
+- 회귀 검사 345개(설정 검증 22개, 진단 23개 추가)가 통과합니다.
 
 # 0.4.16 · 2026-11-04
 

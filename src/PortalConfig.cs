@@ -34,8 +34,9 @@ internal sealed class PortalConfig {
   string path=Path.Combine(directory,FileName);
   if(!File.Exists(path))return new PortalConfig();
   try{return Parse(File.ReadAllText(path,Encoding.UTF8));}
-  catch(IOException ex){return Failed("읽을 수 없습니다: "+ex.Message);}
-  catch(UnauthorizedAccessException ex){return Failed("읽을 수 없습니다: "+ex.Message);}
+  // Only the exception type is kept: messages can contain local paths or file content.
+  catch(IOException ex){return Failed("읽을 수 없습니다("+ex.GetType().Name+")");}
+  catch(UnauthorizedAccessException ex){return Failed("읽을 수 없습니다("+ex.GetType().Name+")");}
  }
 
  static PortalConfig Failed(string problem){var config=new PortalConfig();config.Problems.Add(FileName+" "+problem);return config;}
@@ -44,8 +45,8 @@ internal sealed class PortalConfig {
   var config=new PortalConfig();
   Dictionary<string,object> values;
   try{values=new JavaScriptSerializer().DeserializeObject(json) as Dictionary<string,object>;}
-  catch(ArgumentException ex){return Failed("JSON 형식이 올바르지 않아 기본값을 사용합니다: "+ex.Message);}
-  catch(InvalidOperationException ex){return Failed("JSON 형식이 올바르지 않아 기본값을 사용합니다: "+ex.Message);}
+  catch(ArgumentException){return Failed("JSON 형식이 올바르지 않아 기본값을 사용합니다.");}
+  catch(InvalidOperationException){return Failed("JSON 형식이 올바르지 않아 기본값을 사용합니다.");}
   if(values==null)return Failed("최상위 값이 JSON 객체가 아니어서 기본값을 사용합니다.");
   foreach(var pair in values){
    switch(pair.Key){

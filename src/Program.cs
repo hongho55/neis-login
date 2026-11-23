@@ -196,7 +196,7 @@ internal sealed class MainWindow:Form {
    OpenPreferences();
   });
   trayExit=new ToolStripMenuItem("종료",null,(o,e)=>Close());
-  trayMenu.Items.AddRange(new ToolStripItem[]{trayProgress,new ToolStripSeparator(),new ToolStripMenuItem("도우미 열기",null,(o,e)=>ShowHelper()),trayStop,traySettings,trayExit});
+  trayMenu.Items.AddRange(new ToolStripItem[]{trayProgress,new ToolStripSeparator(),new ToolStripMenuItem("도우미 열기",null,(o,e)=>ShowHelper()),trayStop,traySettings,new ToolStripMenuItem("진단 파일 만들기",null,(o,e)=>DiagnosticsAction.ShowFromMenu()),trayExit});
   tray=new NotifyIcon{Icon=trayIcon,Text="업무 시작 도우미 · 시작 대기",ContextMenuStrip=trayMenu,Visible=true};
   AppVisuals.OpenMenuOnClick(tray,trayMenu);
   tray.DoubleClick+=(o,e)=>ShowHelper();
@@ -493,6 +493,8 @@ internal static class Program {
     Console.WriteLine("PASS: x64 input structure; random credential round-trip, local direct setter, guards and cleanup; no secret printed");
     return 0;
    }
+    if(PortalConfig.Current.Problems.Count>0)RunTrace.Record(TraceEvent.CONFIG_PROBLEMS);
+    if(args.Contains("--diagnostics-bundle"))return DiagnosticsAction.RunFromCommandLine(args);
     if(args.Contains("--status")){
     var s=Settings.Load();
      Console.WriteLine(new JavaScriptSerializer().Serialize(new {
