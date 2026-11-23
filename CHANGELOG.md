@@ -1,3 +1,12 @@
+# 미출시 (0.4.16 이후)
+
+- 동작 변경 없는 유지보수 개선입니다. 인증서 로그인 절차, 안전 검사, 자동 시작 동작은 그대로입니다.
+- 빌드: `TeacherWorkStart.csproj`·`TeacherWorkStart.sln`·`tests/RegressionTests.csproj`를 추가했습니다. `build.ps1`/`test.ps1`은 이를 MSBuild로 호출하며 SDK·NuGet이 필요 없습니다. 결과물 위치(저장소 루트의 EXE)는 같습니다.
+- CI: `.github/workflows/ci.yml`이 push·PR마다 빌드와 회귀 검사를 실행합니다.
+- 설정: 선택적 `portal.config.json`(`src/PortalConfig.cs`)으로 포털 호스트·경로, 브라우저 프로세스 이름, 대기 주기를 바꿀 수 있습니다. 잘못된 값은 기본값으로 되돌리며, https·443 포트·브라우저 실행 경로는 설정할 수 없습니다. 흩어져 있던 포털 URL 검사 4곳을 `PortalConfig.IsPortalUrl` 하나로 모았습니다.
+- 구조: `Portal.cs`를 단계별 partial 파일(`PortalCertificate`·`PortalRecovery`·`PortalAuth`·`PortalProbe`·`PortalSystems`)로 나누고, 200자를 넘던 긴 줄은 공백·줄바꿈만 바꿔 풀었습니다(변환 전후 토큰 동일성 검증).
+- 회귀 검사 322개(설정 검증 22개 추가)가 통과합니다.
+
 # 0.4.16 · 2026-11-04
 
 - 인증서 등록 시 저장 매체와 이동식 드라이브 문자를 함께 저장합니다. 위치 선택 → 정상 인증서창에서 매체·정확한 드라이브 선택 → 새 인증서 목록 확인 → 로컬 암호 저장 순서입니다. 등록창과 홈에 저장 위치를 표시합니다.

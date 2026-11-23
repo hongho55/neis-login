@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build helper and console diagnostic build
+        shell: pwsh
+        run: ./build.ps1
+
+      - name: Run regression tests
+        shell: pwsh
+        run: ./test.ps1
+
+      - name: Upload build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: TeacherWorkStart-${{ github.sha }}
+          path: |
+            bin/Release/TeacherWorkStart.exe
+            bin/Release/TeacherWorkStart.exe.config
+          if-no-files-found: error

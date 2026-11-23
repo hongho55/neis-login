@@ -18,7 +18,17 @@ internal sealed class CertificateStorageDialog:Form {
   Controls.Add(drives);hdd.Checked=previous.Media==CertificateStorage.HardDisk;removable.Checked=!hdd.Checked;drives.Enabled=removable.Checked;
   removable.CheckedChanged+=(o,e)=>drives.Enabled=removable.Checked;
   error.SetBounds(20,169,500,40);error.ForeColor=Color.Firebrick;Controls.Add(error);
-  var next=new Button{Text="이 위치에서 인증서 확인",Left=20,Top=220,Width=325,Height=32};next.Click+=(o,e)=>{try{Choice=new CertificateStorage(hdd.Checked?CertificateStorage.HardDisk:CertificateStorage.Removable,hdd.Checked?"":(drives.SelectedItem as string??""));DialogResult=DialogResult.OK;Close();}catch(SafeFailure ex){error.Text=ex.Message;}};Controls.Add(next);
+  var next=new Button{Text="이 위치에서 인증서 확인",Left=20,Top=220,Width=325,Height=32};
+   next.Click+=(o,e)=>{
+    try{
+    Choice=new CertificateStorage(hdd.Checked?CertificateStorage.HardDisk:CertificateStorage.Removable,hdd.Checked?"":(drives.SelectedItem as string??""));
+    DialogResult=DialogResult.OK;
+    Close();
+    }catch(SafeFailure ex){
+    error.Text=ex.Message;
+   }
+  };
+  Controls.Add(next);
   var cancel=new Button{Text="취소",Left=360,Top=220,Width=160,Height=32,DialogResult=DialogResult.Cancel};Controls.Add(cancel);CancelButton=cancel;
  }
 }

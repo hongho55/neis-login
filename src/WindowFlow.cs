@@ -22,7 +22,13 @@ internal sealed class ForegroundReturn {
  readonly Func<IntPtr> current;
  readonly Func<IntPtr,bool> usable,activate;
  internal bool KeepWorkForeground {get;private set;}
- internal ForegroundReturn(IntPtr original,Func<IntPtr> getCurrent,Func<IntPtr,bool> canUse,Func<IntPtr,bool> setForeground,bool keepWorkForeground=false){target=original;current=getCurrent;usable=canUse;activate=setForeground;KeepWorkForeground=keepWorkForeground;}
+  internal ForegroundReturn(IntPtr original,Func<IntPtr> getCurrent,Func<IntPtr,bool> canUse,Func<IntPtr,bool> setForeground,bool keepWorkForeground=false){
+  target=original;
+  current=getCurrent;
+  usable=canUse;
+  activate=setForeground;
+  KeepWorkForeground=keepWorkForeground;
+ }
  internal void Own(IntPtr hwnd){if(hwnd!=IntPtr.Zero&&hwnd!=target)controlled.Add(hwnd);}
  internal IntPtr Target {get{return target;}}
  internal bool TryReturn(Action<ForegroundReturnOutcome> observed=null){

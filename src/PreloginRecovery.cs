@@ -14,7 +14,15 @@ internal sealed class PreloginStateTrace {
  internal PreloginStateTrace(Action<PreloginTraceData> sink){record=sink;}
  internal void Observe(PreloginRecoveryFacts facts){try{
   var data=new PreloginTraceData{document_found=facts!=null};
-  if(facts!=null){data.target_verified=facts.TargetVerified;data.blank=facts.Blank;data.certificate_visible=facts.CertificateVisible;data.password_visible=facts.PasswordVisible;data.blocking_dialog=facts.BlockingDialog;data.pending=facts.Pending;data.reload_supported=facts.ReloadSupported;}
+   if(facts!=null){
+   data.target_verified=facts.TargetVerified;
+   data.blank=facts.Blank;
+   data.certificate_visible=facts.CertificateVisible;
+   data.password_visible=facts.PasswordVisible;
+   data.blocking_dialog=facts.BlockingDialog;
+   data.pending=facts.Pending;
+   data.reload_supported=facts.ReloadSupported;
+  }
   string key=data.document_found+"/"+data.target_verified+"/"+data.blank+"/"+data.certificate_visible+"/"+data.password_visible+"/"+data.blocking_dialog+"/"+data.pending+"/"+data.reload_supported;
   if(previous!=key){previous=key;record(data);}
  }catch(Exception){}}

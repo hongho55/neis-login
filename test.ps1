@@ -1,14 +1,10 @@
-$ErrorActionPreference = 'Stop'
-$framework = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319'
-$testOutput = Join-Path $PSScriptRoot 'bin\tests'
-New-Item -ItemType Directory -Path $testOutput -Force | Out-Null
-$arguments = @('/nologo','/target:exe','/platform:x64','/langversion:5','/define:CONSOLE','/main:RegressionTests',('/out:' + (Join-Path $testOutput 'RegressionTests.exe')))
-foreach ($library in @('UIAutomationClient','UIAutomationTypes','WindowsBase','PresentationCore','PresentationFramework','WindowsFormsIntegration')) { $arguments += '/reference:' + (Join-Path $framework ('WPF\' + $library + '.dll')) }
-$arguments += '/reference:System.Windows.Forms.dll','/reference:System.Drawing.dll','/reference:System.Web.Extensions.dll','/reference:System.Xaml.dll','/reference:Microsoft.CSharp.dll'
-$arguments += @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'src') -Filter '*.cs' | ForEach-Object FullName)
-$arguments += @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'tests') -Filter '*.cs' | ForEach-Object FullName)
-& (Join-Path $framework 'csc.exe') @arguments
+﻿$ErrorActionPreference = 'Stop'
+# Builds tests\RegressionTests.csproj (src + tests) and runs the harness. No real credentials,
+# browser login, user settings or Startup entries are touched.
+$msbuild = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\MSBuild.exe'
+if (-not (Test-Path -LiteralPath $msbuild)) { throw 'MSBuild(.NET Framework 4.x)를 찾지 못했습니다.' }
+$project = Join-Path $PSScriptRoot 'tests\RegressionTests.csproj'
+& $msbuild $project /nologo /v:minimal /t:Rebuild /p:Configuration=Release
 if ($LASTEXITCODE -ne 0) { throw '회귀 테스트 빌드 실패' }
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'TeacherWorkStart.exe.config') -Destination (Join-Path $testOutput 'RegressionTests.exe.config') -Force
-& (Join-Path $testOutput 'RegressionTests.exe')
+& (Join-Path $PSScriptRoot 'bin\tests\RegressionTests.exe')
 if ($LASTEXITCODE -ne 0) { throw '회귀 테스트 실패' }

@@ -54,7 +54,17 @@ internal static class Native {
   bool acquired=ForegroundRecovery.Acquire(valid,()=>GetForegroundWindow()==hwnd,
    ()=>{if(IsIconic(hwnd)||!IsWindowVisible(hwnd))ShowWindowAsync(hwnd,9);BringWindowToTop(hwnd);ForegroundTrace.Sample(hwnd,FocusPoint.RECOVERY_RAISE);},
    ()=>ForegroundTrace.Request(hwnd,point),
-   ()=>{IntPtr before=GetForegroundWindow();try{AutomationElement.FromHandle(hwnd).SetFocus();}catch(InvalidOperationException){}catch(ElementNotAvailableException){}catch(System.Runtime.InteropServices.COMException){}finally{ForegroundTrace.UiaResult(hwnd,before,FocusPoint.RECOVERY_UIA);}},
+    ()=>{
+    IntPtr before=GetForegroundWindow();
+     try{
+     AutomationElement.FromHandle(hwnd).SetFocus();
+     }catch(InvalidOperationException){
+     }catch(ElementNotAvailableException){
+     }catch(System.Runtime.InteropServices.COMException){
+     }finally{
+     ForegroundTrace.UiaResult(hwnd,before,FocusPoint.RECOVERY_UIA);
+    }
+   },
    System.Threading.Thread.Sleep,Portal.CheckCancel,()=>{waited=true;ForegroundTrace.Sample(hwnd,FocusPoint.RECOVERY_WAIT);Portal.Report("업무용 Edge 창 복원·전환을 다시 시도하고 있어요.");});
   if(acquired&&waited)Portal.Report("업무용 Edge를 앞으로 가져왔어요. 이어서 진행합니다.");
   return acquired;
@@ -110,7 +120,14 @@ internal static class Vault {
  }
  internal static bool Exists(string target) {IntPtr p;if(!Read(target,1,0,out p))return false;try{return true;}finally{WipeFree(p);}}
  internal static void Remove(string target) {if(!Delete(target,1,0)&&Marshal.GetLastWin32Error()!=1168)throw new SafeFailure("이 앱의 저장 암호를 삭제하지 못했습니다.");}
- static void WipeFree(IntPtr p){try{var c=(CREDENTIAL)Marshal.PtrToStructure(p,typeof(CREDENTIAL));for(int i=0;i<c.CredentialBlobSize;i++)Marshal.WriteByte(c.CredentialBlob,i,0);}finally{CredFree(p);}}
+  static void WipeFree(IntPtr p){
+   try{
+   var c=(CREDENTIAL)Marshal.PtrToStructure(p,typeof(CREDENTIAL));
+   for(int i=0;i<c.CredentialBlobSize;i++)Marshal.WriteByte(c.CredentialBlob,i,0);
+   }finally{
+   CredFree(p);
+  }
+ }
  internal static void TypeInto(string target,Action guard) {
   IntPtr p;if(!Read(target,1,0,out p))throw new SafeFailure("등록한 암호가 없습니다. 인증서 설정을 먼저 해 주세요.");
   try {var c=(CREDENTIAL)Marshal.PtrToStructure(p,typeof(CREDENTIAL));
@@ -141,7 +158,11 @@ internal static class Vault {
     expected=Marshal.SecureStringToCoTaskMemUnicode(secret);int diff=(int)c.CredentialBlobSize-secret.Length*2;
     for(int i=0;i<secret.Length;i++)diff|=Marshal.ReadInt16(expected,i*2)^Marshal.ReadInt16(c.CredentialBlob,i*2);
     if(diff!=0)throw new SafeFailure("보안 저장소 왕복 시험 실패");
-    int guarded=0;SetDirect(target,local=>{if(local.Length!=secret.Length)throw new SafeFailure("로컬 직접 입력 시험 실패");for(int i=0;i<local.Length;i++)if(local[i]!=(char)Marshal.ReadInt16(expected,i*2))throw new SafeFailure("로컬 직접 입력 시험 실패");},()=>guarded++);
+    int guarded=0;
+     SetDirect(target,local=>{
+     if(local.Length!=secret.Length)throw new SafeFailure("로컬 직접 입력 시험 실패");
+     for(int i=0;i<local.Length;i++)if(local[i]!=(char)Marshal.ReadInt16(expected,i*2))throw new SafeFailure("로컬 직접 입력 시험 실패");
+    },()=>guarded++);
     if(guarded!=2)throw new SafeFailure("직접 입력 전후 검사 시험 실패");
    }finally{if(expected!=IntPtr.Zero)Marshal.ZeroFreeCoTaskMemUnicode(expected);if(p!=IntPtr.Zero)WipeFree(p);Remove(target);}
   }

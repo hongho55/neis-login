@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Classic-format project so it builds with the .NET Framework MSBuild that ships with Windows
+  (no SDK or NuGet needed), with Visual Studio, and in CI.
+
+    msbuild TeacherWorkStart.csproj /p:Configuration=Release   -> bin\Release\TeacherWorkStart.exe
+    msbuild TeacherWorkStart.csproj /p:Configuration=Cli       -> bin\Cli\TeacherWorkStart.Cli.exe (console diagnostics build)
+-->
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{6F2D7A53-1B0C-4C58-9E57-3A1D5B8E2C41}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>TeacherWorkStart</AssemblyName>
+    <RootNamespace>TeacherWorkStart</RootNamespace>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <PlatformTarget>x64</PlatformTarget>
+    <LangVersion>5</LangVersion>
+    <FileAlignment>512</FileAlignment>
+    <WarningLevel>4</WarningLevel>
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\$(Configuration)\</IntermediateOutputPath>
+    <WpfDir>$(windir)\Microsoft.NET\Framework64\v4.0.30319\WPF\</WpfDir>
+    <!-- Lets machines without the .NET 4.8 targeting pack (e.g. plain Windows) build against the in-box runtime. -->
+    <FrameworkPathOverride Condition=" !Exists('$(MSBuildProgramFiles32)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.8') ">$(windir)\Microsoft.NET\Framework64\v4.0.30319</FrameworkPathOverride>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <DebugType>none</DebugType>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Cli' ">
+    <OutputType>Exe</OutputType>
+    <AssemblyName>TeacherWorkStart.Cli</AssemblyName>
+    <DefineConstants>CONSOLE</DefineConstants>
+    <DebugType>none</DebugType>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Xaml" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="UIAutomationClient"><HintPath>$(WpfDir)UIAutomationClient.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="UIAutomationTypes"><HintPath>$(WpfDir)UIAutomationTypes.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="WindowsBase"><HintPath>$(WpfDir)WindowsBase.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="PresentationCore"><HintPath>$(WpfDir)PresentationCore.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="PresentationFramework"><HintPath>$(WpfDir)PresentationFramework.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="WindowsFormsIntegration"><HintPath>$(WpfDir)WindowsFormsIntegration.dll</HintPath><Private>False</Private></Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="src\**\*.cs" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- The runtime/sku declaration is shared by the GUI, console and test executables. -->
+  <Target Name="CopyRuntimeConfig" AfterTargets="Build">
+    <Copy SourceFiles="TeacherWorkStart.exe.config" DestinationFiles="$(OutDir)$(TargetFileName).config" />
+  </Target>
+</Project>

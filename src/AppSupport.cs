@@ -8,7 +8,10 @@ using System.Web.Script.Serialization;
 internal static class DiagnosticLog {
  static bool TryIO(Action write){try{write();return true;}catch(IOException){return false;}catch(UnauthorizedAccessException){return false;}catch(SecurityException){return false;}}
  internal static bool Record(string root,string code){
-  bool status=TryIO(()=>{Directory.CreateDirectory(root);File.WriteAllText(Path.Combine(root,"status.json"),new JavaScriptSerializer().Serialize(new {time=DateTimeOffset.Now.ToString("o"),code=code}),new UTF8Encoding(false));});
+   bool status=TryIO(()=>{
+   Directory.CreateDirectory(root);
+   File.WriteAllText(Path.Combine(root,"status.json"),new JavaScriptSerializer().Serialize(new {time=DateTimeOffset.Now.ToString("o"),code=code}),new UTF8Encoding(false));
+  });
   bool events=TryIO(()=>{Directory.CreateDirectory(root);File.AppendAllText(Path.Combine(root,"events.log"),DateTimeOffset.Now.ToString("o")+" "+code+Environment.NewLine,new UTF8Encoding(false));});
   return status&&events;
  }

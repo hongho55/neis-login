@@ -1,0 +1,8 @@
+{
+  "host": "gwe.eduptl.kr",
+  "loginPath": "/bpm_lgn_lg00_001.do",
+  "mainPath": "/bpm_man_mn00_001.do",
+  "browserProcess": "msedge",
+  "pollIntervalMs": 250,
+  "tabSettleMs": 150
+}

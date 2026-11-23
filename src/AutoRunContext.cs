@@ -56,7 +56,12 @@ internal sealed class AutoRunContext:ApplicationContext {
   Application.Idle-=StartOnce;if(started||disposed)return;started=true;Portal.HelperWindow=IntPtr.Zero;
   try{
    timing.Mark("HELPER_START");
-   menu=new ContextMenuStrip();progress=new ToolStripMenuItem(lastProgress){Enabled=false};stopItem=new ToolStripMenuItem("중단",null,(o,a)=>RequestStop());settingsItem=new ToolStripMenuItem("설정 열기",null,(o,a)=>RequestSettings());
+   menu=new ContextMenuStrip();
+    progress=new ToolStripMenuItem(lastProgress){
+    Enabled=false
+   };
+   stopItem=new ToolStripMenuItem("중단",null,(o,a)=>RequestStop());
+   settingsItem=new ToolStripMenuItem("설정 열기",null,(o,a)=>RequestSettings());
    menu.Items.AddRange(new ToolStripItem[]{progress,new ToolStripSeparator(),stopItem,settingsItem});
    trayIcon=AppVisuals.CreateIcon();tray=new NotifyIcon{Icon=trayIcon,Text="업무 시작 도우미 · 자동 실행 준비",ContextMenuStrip=menu,Visible=services.TrayVisible};
    AppVisuals.OpenMenuOnClick(tray,menu);tray.DoubleClick+=(o,a)=>RequestSettings();hotkey=new StopHotkeyWindow(RequestStop);
@@ -101,14 +106,35 @@ internal sealed class AutoRunContext:ApplicationContext {
  static string Describe(Exception error){return error is SafeFailure?error.Message:"자동 실행을 중단했습니다. 오류 유형: "+error.GetType().Name+" · 자동으로 재시도하지 않습니다.";}
  void Present(string message,bool openSettings){
   running=false;RunTrace.Record(TraceEvent.AUTO_GUIDANCE_OPEN);ReleaseAutomation();services.Record("AUTO_GUIDANCE_OPENED");
-  try{MainForm=services.CreateMain(settings,message,openSettings);if(MainForm==null)throw new InvalidOperationException("No guidance form");MainForm.Show();if(!Native.IsWindowVisible(MainForm.Handle))Native.ShowWindow(MainForm.Handle,4);}
+   try{
+   MainForm=services.CreateMain(settings,message,openSettings);
+   if(MainForm==null)throw new InvalidOperationException("No guidance form");
+   MainForm.Show();
+   if(!Native.IsWindowVisible(MainForm.Handle))Native.ShowWindow(MainForm.Handle,4);
+  }
   catch(Exception ex){services.Fatal("안내 화면을 열지 못했습니다. 오류 유형: "+ex.GetType().Name+" · 자동 로그인은 다시 실행하지 않습니다.");ExitThread();}
  }
  void ReleaseAutomation(){
   if(resourcesReleased)return;resourcesReleased=true;Portal.Report=s=>{};Portal.Milestone=s=>{};
   Native.PointerNoticeVisibility=visible=>{};
   if(workProgress!=null){workProgress.Finish();workProgress=null;}
-  if(tray!=null){tray.Visible=false;tray.Dispose();tray=null;}if(trayIcon!=null){trayIcon.Dispose();trayIcon=null;}if(menu!=null){menu.Dispose();menu=null;}if(hotkey!=null){hotkey.Dispose();hotkey=null;}
+   if(tray!=null){
+   tray.Visible=false;
+   tray.Dispose();
+   tray=null;
+  }
+   if(trayIcon!=null){
+   trayIcon.Dispose();
+   trayIcon=null;
+  }
+   if(menu!=null){
+   menu.Dispose();
+   menu=null;
+  }
+   if(hotkey!=null){
+   hotkey.Dispose();
+   hotkey=null;
+  }
  }
  protected override void ExitThreadCore(){ReleaseAutomation();base.ExitThreadCore();}
  protected override void Dispose(bool disposing){if(disposing&&!disposed){disposed=true;Application.Idle-=StartOnce;ReleaseAutomation();dispatcher.Dispose();}base.Dispose(disposing);}

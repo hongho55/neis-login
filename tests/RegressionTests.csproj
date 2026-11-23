@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Regression harness: compiles src\ together with tests\ into one console executable that
+  runs every check (no real credentials, browser login, user settings or Startup writes).
+
+    msbuild tests\RegressionTests.csproj /p:Configuration=Release
+    bin\tests\RegressionTests.exe
+-->
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{A3C41E90-52D7-4F6B-8C19-7E0B6D2F9A35}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>RegressionTests</AssemblyName>
+    <RootNamespace>RegressionTests</RootNamespace>
+    <StartupObject>RegressionTests</StartupObject>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <PlatformTarget>x64</PlatformTarget>
+    <LangVersion>5</LangVersion>
+    <DefineConstants>CONSOLE</DefineConstants>
+    <DebugType>none</DebugType>
+    <Optimize>true</Optimize>
+    <WarningLevel>4</WarningLevel>
+    <OutputPath>..\bin\tests\</OutputPath>
+    <IntermediateOutputPath>..\obj\tests\</IntermediateOutputPath>
+    <WpfDir>$(windir)\Microsoft.NET\Framework64\v4.0.30319\WPF\</WpfDir>
+    <FrameworkPathOverride Condition=" !Exists('$(MSBuildProgramFiles32)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.8') ">$(windir)\Microsoft.NET\Framework64\v4.0.30319</FrameworkPathOverride>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Xaml" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="UIAutomationClient"><HintPath>$(WpfDir)UIAutomationClient.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="UIAutomationTypes"><HintPath>$(WpfDir)UIAutomationTypes.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="WindowsBase"><HintPath>$(WpfDir)WindowsBase.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="PresentationCore"><HintPath>$(WpfDir)PresentationCore.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="PresentationFramework"><HintPath>$(WpfDir)PresentationFramework.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="WindowsFormsIntegration"><HintPath>$(WpfDir)WindowsFormsIntegration.dll</HintPath><Private>False</Private></Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\src\**\*.cs" />
+    <Compile Include="*.cs" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Target Name="CopyRuntimeConfig" AfterTargets="Build">
+    <Copy SourceFiles="..\TeacherWorkStart.exe.config" DestinationFiles="$(OutDir)$(TargetFileName).config" />
+  </Target>
+</Project>

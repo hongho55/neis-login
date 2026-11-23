@@ -10,6 +10,7 @@
 
 # Local settings, credentials, certificates and runtime diagnostics
 settings.json
+/portal.config.json
 settings.json.tmp
 status.json
 installation-check.json

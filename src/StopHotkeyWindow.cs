@@ -10,7 +10,9 @@ internal sealed class StopHotkeyWindow:NativeWindow,IDisposable {
  internal bool Registered {get{return registration!=null&&registration.Active;}}
  internal StopHotkeyWindow(Action onStop){
   stop=onStop;CreateHandle(new CreateParams{Caption="TeacherWorkStart.Hotkey",Parent=new IntPtr(-3)});
-  IntPtr hwnd=Handle;registration=new StopHotkeyRegistration(()=>RegisterHotKey(hwnd,1,StopHotkeyRegistration.Modifiers,StopHotkeyRegistration.Key),()=>UnregisterHotKey(hwnd,1));registration.Register();
+  IntPtr hwnd=Handle;
+  registration=new StopHotkeyRegistration(()=>RegisterHotKey(hwnd,1,StopHotkeyRegistration.Modifiers,StopHotkeyRegistration.Key),()=>UnregisterHotKey(hwnd,1));
+  registration.Register();
  }
  protected override void WndProc(ref Message m){if(m.Msg==0x312&&m.WParam==(IntPtr)1&&!disposed)stop();base.WndProc(ref m);}
  public void Dispose(){if(disposed)return;disposed=true;if(registration!=null)registration.Dispose();if(Handle!=IntPtr.Zero)DestroyHandle();}

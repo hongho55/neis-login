@@ -17,5 +17,14 @@ internal sealed class StartupOptions:UserControl {
    catch(Exception){restoring=true;try{automatic.Checked=settings.AutoRunAtLogon;manual.Checked=!settings.AutoRunAtLogon;}finally{restoring=false;}note.Text="선택을 저장하지 못했습니다. 이전 선택을 유지합니다.";}};
   automatic.CheckedChanged+=selected;manual.CheckedChanged+=selected;
  }
- void Change(bool enabled,Action<bool> apply,Func<string> describe){try{apply(enabled);note.Text=describe();}catch(SafeFailure ex){note.Text=ex.Message;}catch(Exception){note.Text="자동 시작 변경을 완료하지 못했습니다. 등록 상태와 보안제품 알림을 확인해 주세요.";}}
+  void Change(bool enabled,Action<bool> apply,Func<string> describe){
+   try{
+   apply(enabled);
+   note.Text=describe();
+   }catch(SafeFailure ex){
+   note.Text=ex.Message;
+   }catch(Exception){
+   note.Text="자동 시작 변경을 완료하지 못했습니다. 등록 상태와 보안제품 알림을 확인해 주세요.";
+  }
+ }
 }

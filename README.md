@@ -49,7 +49,14 @@ Windows PowerShell 또는 PowerShell에서 저장소 루트를 작업 폴더로 
 .\build.ps1
 ```
 
-Windows의 .NET Framework64 C# 컴파일러와 UI Automation/WPF 라이브러리를 사용합니다. 빌드는 프로그램을 실행하거나 자동 시작을 등록하지 않습니다.
+Windows에 기본 포함된 .NET Framework 4.x MSBuild로 [TeacherWorkStart.csproj](TeacherWorkStart.csproj)를 빌드합니다(SDK·NuGet 불필요). `build.ps1`은 Release(GUI)와 Cli(콘솔 진단) 구성을 모두 빌드해 결과를 저장소 루트로 복사하며, `build-installer.ps1`이 이 루트의 EXE를 사용합니다. Visual Studio에서는 `TeacherWorkStart.sln`을 열어도 되고, 직접 빌드하려면 다음처럼 실행합니다.
+
+```powershell
+& "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\MSBuild.exe" TeacherWorkStart.csproj -p:Configuration=Release   # bin\Release\TeacherWorkStart.exe
+& "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\MSBuild.exe" TeacherWorkStart.csproj -p:Configuration=Cli       # bin\Cli\TeacherWorkStart.Cli.exe
+```
+
+빌드는 프로그램을 실행하거나 자동 시작을 등록하지 않습니다.
 
 생성 파일:
 
@@ -59,13 +66,27 @@ Windows의 .NET Framework64 C# 컴파일러와 UI Automation/WPF 라이브러리
 
 생성된 EXE와 해당 .exe.config는 같은 폴더에 둡니다. 기본 사용 방법은 [사용안내.txt](사용안내.txt)를 참고하세요. 소스에 포함된 TeacherWorkStart.exe.config는 .NET 런타임 선언이며 개인 설정 파일이 아닙니다.
 
+## 포털 설정 파일(선택)
+
+기본값은 강원 업무포털(`gwe.eduptl.kr`)과 Edge(`msedge`)입니다. 다른 값이 필요하면 EXE 옆에 `portal.config.json`을 두면 됩니다. 예시는 [portal.config.example.json](portal.config.example.json)에 있습니다. 파일이 없으면 기본값을 그대로 씁니다.
+
+| 항목 | 기본값 | 설명 |
+|---|---|---|
+| host | gwe.eduptl.kr | 자동화를 허용할 포털 호스트(소문자 도메인만) |
+| loginPath / mainPath | /bpm_lgn_lg00_001.do / /bpm_man_mn00_001.do | 로그인·메인 화면 경로 |
+| browserProcess | msedge | 업무 창을 찾을 때 비교하는 프로세스 이름 |
+| pollIntervalMs | 250 | 화면 준비 확인 주기(50~5000) |
+| tabSettleMs | 150 | 탭 선택 후 대기(0~2000) |
+
+안전을 위해 `https`와 443 포트, 실행할 브라우저 파일 경로는 설정할 수 없습니다. 값이 잘못됐거나 알 수 없는 항목이 있으면 그 항목만 기본값으로 되돌립니다. 이 파일은 사용자별 설정이므로 저장소에는 올리지 않습니다(`.gitignore`). 호스트를 바꾸면 비밀번호를 입력할 대상 사이트가 바뀌므로 신뢰하는 주소만 사용하세요. 이 파일이 달라진 포털의 화면 구성(UIA 요소 이름)까지 맞춰 주지는 않으므로 다른 교육청 포털은 별도 검증이 필요합니다.
+
 ## 회귀 테스트
 
 ```powershell
 .\test.ps1
 ```
 
-0.4.13은 Windows에서 GUI·CLI 빌드와 208개 회귀 검사를 통과했습니다. 진행 안내창의 실제 비활성 표시·업데이트, 중단·정리, 자동 시작 모드 저장 실패 복원과 기존 안전 검사를 확인했습니다. 안내창 표시 시험은 숨긴 테스트 창과 가짜 작업을 사용했으며 실제 인증서 로그인이나 재로그온 성공을 의미하지 않습니다.
+현재 소스는 Windows에서 GUI·CLI 빌드와 322개 회귀 검사를 통과합니다. `.github/workflows/ci.yml`이 push·PR마다 같은 빌드와 검사를 실행합니다. 아래는 0.4.13 당시 확인 범위입니다. 진행 안내창의 실제 비활성 표시·업데이트, 중단·정리, 자동 시작 모드 저장 실패 복원과 기존 안전 검사를 확인했습니다. 안내창 표시 시험은 숨긴 테스트 창과 가짜 작업을 사용했으며 실제 인증서 로그인이나 재로그온 성공을 의미하지 않습니다.
 
 이전 0.4.12에서는 실제 사용자 환경의 인증 시작 1회·로그인·두 시스템 초기 화면을 확인했고 인증서 버튼 준비 대기는 2.70초였습니다. 그 결과를 새 버전의 실제 로그인 성공으로 간주하지 않습니다. 로그온 예약 작업의 PT10S는 유지하며 Windows 재로그온 직후 반복 성공률과 흰 화면 원인은 별도 확인 대상입니다.
 
@@ -86,7 +107,14 @@ Windows의 .NET Framework64 C# 컴파일러와 UI Automation/WPF 라이브러리
 | src/CertificateStartup.cs | 인증서 버튼 안정화와 준비 대기 한도 |
 | src/PreloginRecovery.cs | 확인된 빈 로그인 화면의 인증 전 새로고침 1회 조건 |
 | src/StopHotkeyWindow.cs | 메인 창과 독립된 메시지 전용 중단 단축키 창 |
-| src/Portal.cs | 전용 Edge 창 추적, 인증서·URL 검증, 로그인 및 공식 시스템 메뉴 |
+| src/Portal.cs | 전용 Edge 창 추적, 포털 문서 탐색·대기, URL·주소 표시줄 검증 (`Portal`은 아래 파일로 나뉜 partial 클래스) |
+| src/PortalCertificate.cs | 인증서 대화상자 탐색, 등록 인증서 행 일치 확인, 암호 입력칸 식별 |
+| src/PortalRecovery.cs | 인증 전 빈 로그인 화면 새로고침 1회 복구 |
+| src/PortalAuth.cs | 실행 진입점, 직접 입력·키보드 입력 인증 단계 |
+| src/PortalProbe.cs | 암호를 읽지 않는 진단과 백그라운드 입력 시험 |
+| src/PortalSystems.cs | 공식 SSO 메뉴로 나이스·K-에듀파인 열기 |
+| src/PortalStorage.cs | 인증서 저장 위치(매체·드라이브) 선택 |
+| src/PortalConfig.cs | 선택적 `portal.config.json` 로드·검증, 포털 URL 허용 판정 |
 | src/Native.cs | Windows API, UIA 보조 기능, Windows 자격 증명 관리자 처리 |
 | src/StartupRegistration.cs | 사용자 버튼으로 Startup 바로가기 등록·삭제 |
 | src/FastStartup.cs | 일반 권한 로그온 예약 작업, 이전 등록 정리·실패 복구용 백업·소유권 검사 |

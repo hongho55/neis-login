@@ -14,7 +14,11 @@ internal sealed class CertificateStorage {
   string normalized=(drive??"").Trim().ToUpperInvariant();if(normalized=="")return "";
   if(!Regex.IsMatch(normalized,@"^[A-Z]:$"))throw new SafeFailure("드라이브 문자는 D: 또는 Z:처럼 선택해 주세요.");return normalized;
  }
- internal static CertificateStorage From(Settings settings){var location=new CertificateStorage(settings.CertMedia,settings.CertDrive);if(!settings.CertStorageConfigured&&location.Media!=HardDisk)throw new SafeFailure("인증서 저장 위치 등록을 먼저 완료해 주세요.");return location;}
+  internal static CertificateStorage From(Settings settings){
+  var location=new CertificateStorage(settings.CertMedia,settings.CertDrive);
+  if(!settings.CertStorageConfigured&&location.Media!=HardDisk)throw new SafeFailure("인증서 저장 위치 등록을 먼저 완료해 주세요.");
+  return location;
+ }
  internal string Display {get{return Media==HardDisk?"하드디스크":"이동식디스크 "+Drive;}}
  internal string ButtonName {get{return Media==HardDisk?"하드디스크":"이동식디스크";}}
  internal bool IsMediaName(string name){return Regex.Replace(name??"",@"\s+","")==ButtonName;}

@@ -9,9 +9,24 @@ internal static class CertificateRegistration {
   settings.RegistrationPending=true;persist();
   try{
    validate();persistSecret();
-   settings.CertUser=cert.User;settings.CertExpiry=cert.Expiry;settings.CertIssuer=cert.Issuer;settings.CertMedia=location.Media;settings.CertDrive=location.Drive;settings.CertStorageConfigured=true;settings.Verified=false;settings.RegistrationPending=false;persist();
+   settings.CertUser=cert.User;
+   settings.CertExpiry=cert.Expiry;
+   settings.CertIssuer=cert.Issuer;
+   settings.CertMedia=location.Media;
+   settings.CertDrive=location.Drive;
+   settings.CertStorageConfigured=true;
+   settings.Verified=false;
+   settings.RegistrationPending=false;
+   persist();
   }catch{
-   settings.CertUser=previous[0];settings.CertExpiry=previous[1];settings.CertIssuer=previous[2];settings.CertMedia=previous[3];settings.CertDrive=previous[4];settings.CertStorageConfigured=configured;settings.Verified=verified;settings.RegistrationPending=true;
+   settings.CertUser=previous[0];
+   settings.CertExpiry=previous[1];
+   settings.CertIssuer=previous[2];
+   settings.CertMedia=previous[3];
+   settings.CertDrive=previous[4];
+   settings.CertStorageConfigured=configured;
+   settings.Verified=verified;
+   settings.RegistrationPending=true;
    try{persist();}catch{}throw;
   }
  }

@@ -18,7 +18,7 @@ internal static partial class Portal {
   if(BoundWindow()!=null&&workProfile==profile)return OpenForSetup(profile);
   var candidates=new List<PortalContext>();
   foreach(var window in Windows())foreach(var doc in All(window.Item2,ControlType.Document)){
-   Uri url;if(doc.Current.IsOffscreen||!Uri.TryCreate(DocUrl(doc),UriKind.Absolute,out url)||url.Scheme!="https"||url.Host!="gwe.eduptl.kr"||url.Port!=443||url.AbsolutePath!=LoginPath)continue;
+   Uri url;if(doc.Current.IsOffscreen||!Uri.TryCreate(DocUrl(doc),UriKind.Absolute,out url)||!PortalConfig.Current.IsPortalUrl(url,LoginPath))continue;
    var candidate=new PortalContext{Hwnd=window.Item1,Window=window.Item2,Doc=doc,Path=LoginPath};var dialog=Dialog(candidate);
    if(dialog==null||dialog.Current.IsOffscreen)continue;
    try{Validate(candidate,LoginPath,false);candidates.Add(candidate);}catch(SafeFailure){}
@@ -34,7 +34,8 @@ internal static partial class Portal {
   var media=All(dialog,ControlType.Button).Where(b=>!b.Current.IsOffscreen&&b.Current.IsEnabled&&location.IsMediaName(b.Current.Name)).ToList();
   if(media.Count!=1)throw new SafeFailure("인증서 저장 매체 버튼을 하나로 확인하지 못했습니다. 암호를 입력하지 않습니다.");
   var previous=StorageRows(initial);
-  object mediaPattern;bool mediaDirect=media[0].TryGetCurrentPattern(InvokePattern.Pattern,out mediaPattern)||media[0].TryGetCurrentPattern(SelectionItemPattern.Pattern,out mediaPattern),driveDirect=false;
+  object mediaPattern;
+  bool mediaDirect=media[0].TryGetCurrentPattern(InvokePattern.Pattern,out mediaPattern)||media[0].TryGetCurrentPattern(SelectionItemPattern.Pattern,out mediaPattern),driveDirect=false;
   bool driveMenuOpen=location.Media==CertificateStorage.Removable&&dialog.FindAll(TreeScope.Descendants,Condition.TrueCondition).Cast<AutomationElement>().Any(e=>!e.Current.IsPassword&&!e.Current.IsOffscreen&&location.IsDriveName(e.Current.Name));
   if(!driveMenuOpen)Native.Click(media[0],initial.Hwnd,workProcess);
   if(location.Media==CertificateStorage.Removable){
@@ -74,6 +75,19 @@ internal static partial class Portal {
  }
  internal static object StorageViewFacts(PortalContext current){
   Validate(current,LoginPath,false);var dialog=Dialog(current);var list=dialog==null?null:Id(dialog,"kc_cert_list");
-  return new {version=System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString(),pid=System.Diagnostics.Process.GetCurrentProcess().Id,dialogPresent=dialog!=null,dialogOffscreen=dialog==null?(bool?)null:dialog.Current.IsOffscreen,listPresent=list!=null,listOffscreen=list==null?(bool?)null:list.Current.IsOffscreen,dataItems=list==null?0:All(list,ControlType.DataItem).Count,actualRowKeys=StorageRows(current),guardRows=StorageRows(current).Length,certificateCount=list==null?0:ReadCertificatesFromList(list,true).Count,passwordRead=false,settingsWritten=false};
+   return new {
+   version=System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString(),
+   pid=System.Diagnostics.Process.GetCurrentProcess().Id,
+   dialogPresent=dialog!=null,
+   dialogOffscreen=dialog==null?(bool?)null:dialog.Current.IsOffscreen,
+   listPresent=list!=null,
+   listOffscreen=list==null?(bool?)null:list.Current.IsOffscreen,
+   dataItems=list==null?0:All(list,ControlType.DataItem).Count,
+   actualRowKeys=StorageRows(current),
+   guardRows=StorageRows(current).Length,
+   certificateCount=list==null?0:ReadCertificatesFromList(list,true).Count,
+   passwordRead=false,
+   settingsWritten=false
+  };
  }
 }
