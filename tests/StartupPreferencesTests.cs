@@ -26,10 +26,9 @@ internal static class StartupPreferencesTests {
   check(!loaded.AutoRunAtLogon&&!loaded.OpenNeis&&loaded.PendingAttempt,"startup/program-only choice survives save reload while preserving other preferences");
   bool failed=false;try{StartupPreferences.Save(old,true,()=>{throw new IOException("INJECTED");});}catch(IOException){failed=true;}
   check(failed&&!old.AutoRunAtLogon,"startup/preference save failure restores prior behavior");
-  using(var form=new MainWindow(new Settings(),()=>{throw new IOException("INJECTED");})){
-   var mode=(ComboBox)typeof(MainWindow).GetField("startupMode",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(form);
-   mode.SelectedIndex=1;var status=(Label)typeof(MainWindow).GetField("status",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(form);
-   check(mode.SelectedIndex==0&&status.Text.Contains("저장하지 못"),"startup/real selector rolls back and reports failed save");
+  using(var panel=new StartupOptions(new Settings(),()=>{throw new IOException("INJECTED");},enabled=>{},()=>"TEST_STATE")){
+   var modes=panel.Controls.OfType<RadioButton>().ToArray();modes[1].Checked=true;
+   check(modes[0].Checked&&!modes[1].Checked&&panel.Controls.OfType<Label>().Any(l=>l.Text.Contains("저장하지 못")),"startup/real selector rolls back and reports failed save");
   }
   var info=new System.Diagnostics.ProcessStartInfo(Assembly.GetExecutingAssembly().Location,"--startup-tray-child"){UseShellExecute=false,CreateNoWindow=true,WindowStyle=System.Diagnostics.ProcessWindowStyle.Hidden,RedirectStandardOutput=true};
   using(var child=System.Diagnostics.Process.Start(info)){

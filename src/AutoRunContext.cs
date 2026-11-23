@@ -8,6 +8,8 @@ using System.Windows.Forms;
 internal static class AutoRunEligibility {
  internal static string Check(Settings settings,Func<bool> credentialExists){
   if(settings.PendingAttempt)return "이전 입력 결과가 미확인이라 자동 실행하지 않았습니다. 화면을 확인하고 오류 상태를 직접 초기화해 주세요.";
+  if(settings.RegistrationPending)return "인증서·저장 위치 등록이 완료되지 않았습니다. 로컬 등록을 다시 마쳐 주세요.";
+  try{CertificateStorage.From(settings);}catch(SafeFailure){return "인증서 저장 위치와 드라이브를 확인해 주세요. 자동 로그인은 시작하지 않았습니다.";}
   if(!settings.Verified||String.IsNullOrWhiteSpace(settings.CertUser)||String.IsNullOrWhiteSpace(settings.CertExpiry)||String.IsNullOrWhiteSpace(settings.CertIssuer))return "처음 설정을 완료한 뒤 업무 시작을 눌러 주세요. 자동 로그인은 시작하지 않았습니다.";
   DateTime expiry;if(!DateTime.TryParse(settings.CertExpiry,out expiry)||expiry.Date<DateTime.Today)return "등록 인증서의 유효기간을 확인해 주세요. 자동 로그인은 시작하지 않았습니다.";
   try{WindowFlow.LaunchArguments(settings.Profile,Portal.Origin+Portal.LoginPath);}catch(SafeFailure){return "Edge 프로필 설정을 확인해 주세요. 자동 로그인은 시작하지 않았습니다.";}
@@ -21,6 +23,7 @@ internal sealed class AutoRunServices {
  internal Action<string> Record=AppState.Record;
  internal Func<bool> LogFailed=()=>AppState.HasLogFailure;
  internal bool TrayVisible=true;
+ internal bool ProgressVisible=true;
  internal Action<string> Fatal=message=>MessageBox.Show(AppState.WithLogNotice(message),"업무 시작 도우미 · 중단");
  internal Func<Settings,string,bool,Form> CreateMain=(s,message,openSettings)=>{
   var form=new MainWindow(s);form.ShowNotice(message);if(openSettings)form.Shown+=(o,e)=>form.OpenPreferences();return form;
@@ -38,7 +41,7 @@ internal sealed class AutoRunTiming {
 
 internal sealed class AutoRunContext:ApplicationContext {
  readonly Settings settings;readonly AutoRunServices services;readonly Control dispatcher=new Control{Visible=false};
- readonly AutoRunTiming timing;NotifyIcon tray;Icon trayIcon;ContextMenuStrip menu;ToolStripMenuItem progress,stopItem,settingsItem;StopHotkeyWindow hotkey;
+ readonly AutoRunTiming timing;NotifyIcon tray;Icon trayIcon;ContextMenuStrip menu;ToolStripMenuItem progress,stopItem,settingsItem;StopHotkeyWindow hotkey;WorkProgressWindow workProgress;
  bool running,settingsRequested,disposed,started,resourcesReleased;string lastProgress="자동 실행 준비 중";
  internal bool Running {get{return running;}}
  internal bool ResourcesReleased {get{return resourcesReleased;}}
@@ -63,8 +66,9 @@ internal sealed class AutoRunContext:ApplicationContext {
    if(reason!=null){RunTrace.Record(TraceEvent.AUTO_PREFLIGHT_REJECTED);Present(reason,false);return;}
    RunTrace.Record(TraceEvent.AUTO_PREFLIGHT_ACCEPTED);
    Portal.Report=message=>Post(()=>UpdateProgress(message));Portal.Milestone=timing.Mark;
-   Portal.BeginOperation();running=true;RunTrace.Record(TraceEvent.AUTO_WORK_START);UpdateProgress("업무 시작 중");
-   if(services.TrayVisible)try{tray.BalloonTipTitle="업무 시작 도우미";tray.BalloonTipText="자동 작업을 시작합니다. 시계 옆 책 아이콘을 누르면 상태·중단·설정을 볼 수 있습니다.";tray.ShowBalloonTip(3500);}catch(System.ComponentModel.Win32Exception){}
+   Portal.BeginOperation();running=true;RunTrace.Record(TraceEvent.AUTO_WORK_START);
+   if(services.ProgressVisible){workProgress=new WorkProgressWindow(RequestStop);workProgress.Show();Native.PointerNoticeVisibility=workProgress.SetPointerNoticeVisible;}
+   UpdateProgress("업무용 Edge를 열고 있어요.");
    ThreadPool.QueueUserWorkItem(_=>{
     bool success=false;Exception failure=null;try{success=services.Run(settings);}catch(Exception ex){failure=ex;}
     Post(()=>Complete(success,failure));
@@ -74,6 +78,7 @@ internal sealed class AutoRunContext:ApplicationContext {
  void Post(Action action){if(disposed)return;try{dispatcher.BeginInvoke((Action)(()=>{if(!disposed)action();}));}catch(InvalidOperationException){if(!disposed)throw;}}
  void UpdateProgress(string text){
   if(resourcesReleased||tray==null)return;lastProgress=text;
+  if(workProgress!=null)workProgress.UpdateProgress(text);
   string hint=hotkey!=null&&hotkey.Registered?"":" · 단축키 사용 불가: 트레이 중단 사용";
   progress.Text=text+hint;string tooltip=(hotkey!=null&&hotkey.Registered?"":"단축키 사용 불가 · ")+"업무 도우미 · "+text;tray.Text=tooltip.Length>63?tooltip.Substring(0,63):tooltip;
  }
@@ -101,6 +106,8 @@ internal sealed class AutoRunContext:ApplicationContext {
  }
  void ReleaseAutomation(){
   if(resourcesReleased)return;resourcesReleased=true;Portal.Report=s=>{};Portal.Milestone=s=>{};
+  Native.PointerNoticeVisibility=visible=>{};
+  if(workProgress!=null){workProgress.Finish();workProgress=null;}
   if(tray!=null){tray.Visible=false;tray.Dispose();tray=null;}if(trayIcon!=null){trayIcon.Dispose();trayIcon=null;}if(menu!=null){menu.Dispose();menu=null;}if(hotkey!=null){hotkey.Dispose();hotkey=null;}
  }
  protected override void ExitThreadCore(){ReleaseAutomation();base.ExitThreadCore();}

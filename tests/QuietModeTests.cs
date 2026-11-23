@@ -32,10 +32,10 @@ internal static class QuietModeTests {
  [DllImport("user32.dll")]static extern bool IsWindowVisible(IntPtr hwnd);
  [DllImport("user32.dll")]static extern IntPtr SendMessage(IntPtr hwnd,uint message,IntPtr w,IntPtr l);
  static Settings Ready(){return new Settings{Verified=true,CertUser="TEST_ONLY",CertIssuer="TEST_ONLY",CertExpiry="2099-12-31"};}
- static Result Execute(Settings settings,Func<Settings,string> validate,Func<Settings,Result,bool> work,Action<AutoRunContext,Result> tick=null,bool logFailed=false,bool factoryFails=false,bool visibleTray=false){
+ static Result Execute(Settings settings,Func<Settings,string> validate,Func<Settings,Result,bool> work,Action<AutoRunContext,Result> tick=null,bool logFailed=false,bool factoryFails=false,bool visibleTray=false,bool showProgress=false){
   var result=new Result();AutoRunContext context=null;
   var services=new AutoRunServices{
-   Validate=validate,LogFailed=()=>logFailed,TrayVisible=visibleTray,
+   Validate=validate,LogFailed=()=>logFailed,TrayVisible=visibleTray,ProgressVisible=showProgress,
    Run=s=>{result.Work++;result.HasMainDuringWork=context.HasMainWindow;try{return work(s,result);}finally{result.WorkerDone=true;}},
    Record=code=>result.Records.Add(code),Fatal=message=>result.Fatal++,
    CreateMain=(s,message,open)=>{result.Forms++;result.Notice=message;result.SettingsOpened=open;if(factoryFails)throw new InvalidOperationException("injected guide failure");return new Guide();}
@@ -82,6 +82,12 @@ internal static class QuietModeTests {
   },false,false,true);
   check(observedTray&&trayResult.Forms==0,"quiet/real tray icon is visible while running without main form");
   check(trayResult.Released&&trayDisposed==1&&!watchedTray.Visible,"quiet/real tray icon disposed once on successful exit");
+  bool releaseProgress=false,progressVisible=false;int progressDisposed=0;
+  var progressResult=Execute(Ready(),s=>null,(s,r)=>{while(!Volatile.Read(ref releaseProgress)&&!Portal.Cancelled)Thread.Sleep(2);return true;},(ctx,r)=>{
+   if(ctx.Running&&!progressVisible){var notice=(WorkProgressWindow)typeof(AutoRunContext).GetField("workProgress",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(ctx);if(notice!=null){progressVisible=notice.Visible;notice.Disposed+=(o,e)=>progressDisposed++;Volatile.Write(ref releaseProgress,true);}}
+  },false,false,false,true);
+  check(progressVisible&&progressResult.Forms==0&&progressResult.Work==1,"presentation/automatic run shows one notice while keeping the settings main window closed");
+  check(progressResult.Released&&progressDisposed==1,"presentation/automatic success disposes the notice exactly once without leaving a resident window");
 
   var missing=Execute(new Settings(),s=>AutoRunEligibility.Check(s,()=>{throw new Exception("must not read credentials");}),(s,r)=>true);
   check(missing.Forms==1&&missing.Work==0&&missing.Notice.Contains("설정"),"quiet/incomplete setup opens guidance without work");

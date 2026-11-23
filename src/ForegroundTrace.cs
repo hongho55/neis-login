@@ -1,6 +1,6 @@
 using System;
 
-internal enum FocusPoint { ACTIVATE_REQUEST, CLICK_REQUEST, AUTHENTICATE_REQUEST, RESTORE_REQUEST, RESTORE_UIA, EDGE_CREATED_RETURN, PORTAL_TAB_RETURN, CERTIFICATE_RETURN, AUTH_INPUT_FINALLY_RETURN, SYSTEM_MENU_RETURN, SYSTEM_TAB_RETURN, RUN_FINALLY_RETURN, DIAGNOSTIC_RETURN, TAB_FOREGROUND, TAB_BACKGROUND, LOGIN_WAIT, NEIS_WAIT, KEDU_WAIT }
+internal enum FocusPoint { ACTIVATE_REQUEST, CLICK_REQUEST, AUTHENTICATE_REQUEST, RESTORE_REQUEST, RESTORE_UIA, EDGE_CREATED_RETURN, PORTAL_TAB_RETURN, CERTIFICATE_RETURN, AUTH_INPUT_FINALLY_RETURN, SYSTEM_MENU_RETURN, SYSTEM_TAB_RETURN, RUN_FINALLY_RETURN, DIAGNOSTIC_RETURN, TAB_FOREGROUND, TAB_BACKGROUND, LOGIN_WAIT, NEIS_WAIT, KEDU_WAIT, RECOVERY_UIA, RECOVERY_WAIT, SYSTEM_VIEW_RECOVERY, RECOVERY_RAISE, DIRECT_CONTROL_FALLBACK }
 internal sealed class ForegroundTraceData {
  public string point,return_outcome;
  public long target_hwnd,before_hwnd,after_hwnd;public uint target_pid,before_pid,after_pid;
@@ -22,7 +22,7 @@ internal static class ForegroundTrace {
   bool result=request(target);IntPtr after=current();Emit(TraceEvent.FOREGROUND_RESULT,target,before,after,point,result,record);return result;
  }
  internal static void Sample(IntPtr target,FocusPoint point,ForegroundReturnOutcome? outcome=null){try{IntPtr current=Native.GetForegroundWindow();var data=Data(target,current,current,point);data.return_outcome=outcome.HasValue?outcome.Value.ToString():null;RunTrace.Record(outcome.HasValue?TraceEvent.FOCUS_RETURN_DECISION:TraceEvent.FOREGROUND_SAMPLE,focus:data);}catch(Exception){}}
- internal static void UiaResult(IntPtr target,IntPtr before){try{RunTrace.Record(TraceEvent.FOREGROUND_SAMPLE,focus:Data(target,before,Native.GetForegroundWindow(),FocusPoint.RESTORE_UIA));}catch(Exception){}}
+ internal static void UiaResult(IntPtr target,IntPtr before,FocusPoint point=FocusPoint.RESTORE_UIA){try{RunTrace.Record(TraceEvent.FOREGROUND_SAMPLE,focus:Data(target,before,Native.GetForegroundWindow(),point));}catch(Exception){}}
 }
 
 internal sealed class ForegroundWaitTrace {

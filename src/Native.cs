@@ -16,6 +16,11 @@ internal static class Native {
  [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(IntPtr h);
  [DllImport("user32.dll")] internal static extern IntPtr GetForegroundWindow();
  [DllImport("user32.dll")] internal static extern bool ShowWindow(IntPtr h,int c);
+ [DllImport("user32.dll")] internal static extern bool ShowWindowAsync(IntPtr h,int c);
+ [DllImport("user32.dll")]static extern bool BringWindowToTop(IntPtr h);
+ [StructLayout(LayoutKind.Sequential)]internal struct POINT {internal int X,Y;}
+ [DllImport("user32.dll")]static extern IntPtr WindowFromPoint(POINT point);
+ [DllImport("user32.dll")]static extern IntPtr GetAncestor(IntPtr hwnd,uint flags);
  [DllImport("user32.dll")] internal static extern bool SetCursorPos(int x,int y);
  [DllImport("user32.dll")] internal static extern uint SendInput(uint n, INPUT[] p, int size);
  [StructLayout(LayoutKind.Sequential)] internal struct INPUT { internal uint type; internal INPUTUNION u; }
@@ -42,18 +47,38 @@ internal static class Native {
   INPUT b=a;b.u.key.flags=6;
   if(SendInput(2,new[]{a,b},Marshal.SizeOf(typeof(INPUT)))!=2)throw new SafeFailure("암호 입력을 전달하지 못했습니다. 재입력하지 않습니다.");
  }
- internal static void Click(AutomationElement e,IntPtr hwnd) {
+ internal static Action<bool> PointerNoticeVisibility=visible=>{};
+ internal static bool EnsureForeground(IntPtr hwnd,FocusPoint point,uint expectedProcess=0){
+  uint expected=expectedProcess;if(expected==0)GetWindowThreadProcessId(hwnd,out expected);bool waited=false;
+  Func<bool> valid=()=>{uint actual;GetWindowThreadProcessId(hwnd,out actual);return hwnd!=IntPtr.Zero&&expected!=0&&IsWindow(hwnd)&&actual==expected;};
+  bool acquired=ForegroundRecovery.Acquire(valid,()=>GetForegroundWindow()==hwnd,
+   ()=>{if(IsIconic(hwnd)||!IsWindowVisible(hwnd))ShowWindowAsync(hwnd,9);BringWindowToTop(hwnd);ForegroundTrace.Sample(hwnd,FocusPoint.RECOVERY_RAISE);},
+   ()=>ForegroundTrace.Request(hwnd,point),
+   ()=>{IntPtr before=GetForegroundWindow();try{AutomationElement.FromHandle(hwnd).SetFocus();}catch(InvalidOperationException){}catch(ElementNotAvailableException){}catch(System.Runtime.InteropServices.COMException){}finally{ForegroundTrace.UiaResult(hwnd,before,FocusPoint.RECOVERY_UIA);}},
+   System.Threading.Thread.Sleep,Portal.CheckCancel,()=>{waited=true;ForegroundTrace.Sample(hwnd,FocusPoint.RECOVERY_WAIT);Portal.Report("업무용 Edge 창 복원·전환을 다시 시도하고 있어요.");});
+  if(acquired&&waited)Portal.Report("업무용 Edge를 앞으로 가져왔어요. 이어서 진행합니다.");
+  return acquired;
+ }
+ internal static void Click(AutomationElement e,IntPtr hwnd,uint expectedProcess=0) {
+  Portal.CheckCancel();uint observed;GetWindowThreadProcessId(hwnd,out observed);
+  if(!IsWindow(hwnd)||(expectedProcess!=0&&observed!=expectedProcess))throw new SafeFailure("대상 업무 창이 바뀌어 클릭하지 않습니다.");
   object p;
   if(e.TryGetCurrentPattern(InvokePattern.Pattern,out p)) {((InvokePattern)p).Invoke();return;}
   if(e.TryGetCurrentPattern(SelectionItemPattern.Pattern,out p)) {((SelectionItemPattern)p).Select();return;}
-  System.Windows.Point point;
-  if(!e.TryGetClickablePoint(out point))throw new SafeFailure("대상 요소에 클릭 위치가 없습니다. 요소를 찾은 것과 입력 가능 여부는 별도입니다.");
-  ForegroundTrace.Request(hwnd,FocusPoint.CLICK_REQUEST);
-  if(GetForegroundWindow()!=hwnd)throw new SafeFailure("대상 Edge 창을 활성화하지 못했습니다.");
-  if(!SetCursorPos((int)point.X,(int)point.Y))throw new SafeFailure("커서를 대상 위치로 옮기지 못했습니다. 클릭하지 않고 중단합니다.");
-  if(!IsWindow(hwnd)||GetForegroundWindow()!=hwnd||e.Current.IsOffscreen||!e.Current.IsEnabled)throw new SafeFailure("클릭 직전 대상이 바뀌었습니다. 클릭하지 않습니다.");
-  INPUT a=new INPUT{type=0,u=new INPUTUNION{mouse=new MOUSEINPUT{flags=2}}};INPUT b=a;b.u.mouse.flags=4;
-  if(SendInput(2,new[]{a,b},Marshal.SizeOf(typeof(INPUT)))!=2)throw new SafeFailure("클릭을 전달하지 못했습니다.");
+  uint expected=expectedProcess==0?observed:expectedProcess;
+  if(!EnsureForeground(hwnd,FocusPoint.CLICK_REQUEST,expected))throw new SafeFailure("직접 실행을 지원하지 않는 요소이며 업무 창 전환도 거절되어 클릭하지 않았습니다.");
+  var notice=PointerNoticeVisibility;
+  try{
+   notice(false);Portal.CheckCancel();System.Windows.Point point;
+   if(!e.TryGetClickablePoint(out point))throw new SafeFailure("대상 요소에 클릭 위치가 없습니다. 요소를 찾은 것과 입력 가능 여부는 별도입니다.");
+   uint actual;GetWindowThreadProcessId(hwnd,out actual);
+   if(!IsWindow(hwnd)||actual!=expected||GetForegroundWindow()!=hwnd||e.Current.IsOffscreen||!e.Current.IsEnabled)throw new SafeFailure("클릭 직전 대상이 바뀌었습니다. 클릭하지 않습니다.");
+   if(GetAncestor(WindowFromPoint(new POINT{X=(int)point.X,Y=(int)point.Y}),2)!=hwnd)throw new SafeFailure("대상 클릭 위치를 다른 창이 가리고 있어 클릭하지 않았습니다.");
+   if(!SetCursorPos((int)point.X,(int)point.Y))throw new SafeFailure("커서를 대상 위치로 옮기지 못했습니다. 클릭하지 않고 중단합니다.");
+   Portal.CheckCancel();if(GetForegroundWindow()!=hwnd||GetAncestor(WindowFromPoint(new POINT{X=(int)point.X,Y=(int)point.Y}),2)!=hwnd)throw new SafeFailure("클릭 직전 창이 바뀌어 클릭하지 않습니다.");
+   INPUT a=new INPUT{type=0,u=new INPUTUNION{mouse=new MOUSEINPUT{flags=2}}};INPUT b=a;b.u.mouse.flags=4;
+   if(SendInput(2,new[]{a,b},Marshal.SizeOf(typeof(INPUT)))!=2)throw new SafeFailure("클릭을 전달하지 못했습니다.");
+  }finally{notice(true);}
  }
 }
 

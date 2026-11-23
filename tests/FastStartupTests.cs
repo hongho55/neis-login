@@ -69,7 +69,7 @@ internal static class FastStartupTests {
   var custom=new Store{Task=new LogonTaskRecord{Xml=xml.Replace("PT10S","PT30S"),Enabled=true}};check(Refuses(()=>Controller(custom,noPrior,exe).Enable())&&custom.Calls.Count==0,"delay/custom nonzero delay is never overwritten as legacy");
   using(var form=new MainWindow(new Settings(),()=>{})){
    int buttons=0,restore=0,modes=0;foreach(Control control in form.Controls){if(control is Button&&(control.Text.Contains("자동 시작")||control.Text=="10초 지연 적용"))buttons++;if(control.Text.Contains("기존 방식"))restore++;if(control is ComboBox&&control.AccessibleName=="자동 시작 후 동작")modes++;}
-   check(buttons==2&&restore==0&&modes==1,"fast/GUI exposes scheduler on off and launch behavior without classic restore");
+   check(buttons==1&&restore==0&&modes==0,"fast/home exposes a single startup settings entry without clutter or registration writes");
   }
  }
 }

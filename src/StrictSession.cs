@@ -62,6 +62,7 @@ internal sealed class StrictSession:IDisposable {
  void VerifyDom(){Stage("VERIFY_DOM_CERTIFICATE_SELECTION");context=Current();Portal.ConfirmSelectedCertificate(context,settings);selected=true;selectionMethod="DOM semantic selection + UIA verification";Done(selectionMethod);}
  void Login(){
   OperationSafety.RequireResolved(settings.PendingAttempt);
+  if(settings.CertStorageConfigured||settings.RegistrationPending)throw new SafeFailure("저장 위치를 등록한 인증서는 정상 업무 시작으로 진행해 주세요. 이 별도 진단은 암호를 입력하지 않습니다.");
   if(attempted||!freshDialog||!selected)throw new SafeFailure("새 인증서창과 선택 확인이 필요하며 로그인은 한 번만 시도합니다.");
   context=Current();Portal.Validate(context,Portal.LoginPath,false);Portal.ConfirmSelectedCertificate(context,settings);
   DateTime expiry;if(!DateTime.TryParse(settings.CertExpiry,out expiry)||expiry.Date<DateTime.Today)throw new SafeFailure("인증서 유효기간을 확인해 주세요.");
