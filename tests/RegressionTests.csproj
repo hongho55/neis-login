@@ -49,6 +49,7 @@
     <Compile Include="..\src\**\*.cs" />
     <Compile Include="*.cs" />
   </ItemGroup>
+  <ItemGroup><EmbeddedResource Include="..\src\Assets\security-loading.png"><LogicalName>SecurityLoading.png</LogicalName></EmbeddedResource></ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="CopyRuntimeConfig" AfterTargets="Build">
     <Copy SourceFiles="..\TeacherWorkStart.exe.config" DestinationFiles="$(OutDir)$(TargetFileName).config" />

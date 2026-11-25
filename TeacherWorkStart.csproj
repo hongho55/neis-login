@@ -62,6 +62,7 @@
   <ItemGroup>
     <Compile Include="src\**\*.cs" />
   </ItemGroup>
+  <ItemGroup><EmbeddedResource Include="src\Assets\security-loading.png"><LogicalName>SecurityLoading.png</LogicalName></EmbeddedResource></ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- The runtime/sku declaration is shared by the GUI, console and test executables. -->
   <Target Name="CopyRuntimeConfig" AfterTargets="Build">

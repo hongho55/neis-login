@@ -72,7 +72,7 @@ internal sealed class AutoRunContext:ApplicationContext {
    RunTrace.Record(TraceEvent.AUTO_PREFLIGHT_ACCEPTED);
    Portal.Report=message=>Post(()=>UpdateProgress(message));Portal.Milestone=timing.Mark;
    Portal.BeginOperation();running=true;RunTrace.Record(TraceEvent.AUTO_WORK_START);
-   if(services.ProgressVisible){workProgress=new WorkProgressWindow(RequestStop);workProgress.Show();Native.PointerNoticeVisibility=workProgress.SetPointerNoticeVisible;}
+   if(services.ProgressVisible){workProgress=new WorkProgressWindow(RequestStop);workProgress.Show();Native.PointerNoticeVisibility=workProgress.SetPointerNoticeVisible;Native.SecurityObservationArea=workProgress.MoveOutsideObservation;}
    UpdateProgress("업무용 Edge를 열고 있어요.");
    ThreadPool.QueueUserWorkItem(_=>{
     bool success=false;Exception failure=null;try{success=services.Run(settings);}catch(Exception ex){failure=ex;}
@@ -116,7 +116,7 @@ internal sealed class AutoRunContext:ApplicationContext {
  }
  void ReleaseAutomation(){
   if(resourcesReleased)return;resourcesReleased=true;Portal.Report=s=>{};Portal.Milestone=s=>{};
-  Native.PointerNoticeVisibility=visible=>{};
+  Native.PointerNoticeVisibility=visible=>{};Native.SecurityObservationArea=area=>{};
   if(workProgress!=null){workProgress.Finish();workProgress=null;}
    if(tray!=null){
    tray.Visible=false;

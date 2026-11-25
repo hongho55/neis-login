@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
 
 // Modeless notice: never an authentication dialog and never reads browser contents.
@@ -18,6 +19,22 @@ internal sealed class WorkProgressWindow:Form {
   FormClosing+=(o,e)=>{if(!finishing){e.Cancel=true;requestStop();}};
  }
  internal void UpdateProgress(string message){phase.Text=message;}
+ internal void MoveOutsideObservation(Rectangle observation){
+  if(IsDisposed||!IsHandleCreated)return;
+  Action apply=()=>{
+   if(IsDisposed||finishing||!Bounds.IntersectsWith(observation))return;
+   var chosen=OutsideObservation(Screen.AllScreens.Select(s=>s.WorkingArea).ToArray(),Size,observation);
+   if(chosen.HasValue){if(Location!=chosen.Value)Location=chosen.Value;}
+   else if(Visible)Hide(); // No space: keep tray/hotkey stop; never hide/show per sample.
+  };
+  try{if(InvokeRequired)Invoke(apply);else apply();}catch(InvalidOperationException){}
+ }
+ internal static Point? OutsideObservation(Rectangle[] screens,Size size,Rectangle observation){
+  foreach(var area in screens)foreach(var point in new[]{new Point(area.Left,area.Top),new Point(area.Right-size.Width,area.Top),new Point(area.Left,area.Bottom-size.Height),new Point(area.Right-size.Width,area.Bottom-size.Height)}){
+   var rect=new Rectangle(point,size);if(area.Contains(rect)&&!rect.IntersectsWith(observation))return point;
+  }
+  return null;
+ }
  internal static Point CenterWithin(Rectangle area,Size size){return new Point(area.Left+Math.Max(0,(area.Width-size.Width)/2),area.Top+Math.Max(0,(area.Height-size.Height)/2));}
  internal void SetPointerNoticeVisible(bool visible){
   if(IsDisposed||!IsHandleCreated)return;

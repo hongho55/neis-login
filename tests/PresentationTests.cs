@@ -13,6 +13,9 @@ internal static class PresentationTests {
  internal static void Run(Action<bool,string> check){
   check(WorkProgressWindow.CenterWithin(new Rectangle(100,200,1200,800),new Size(440,190))==new Point(480,505),"presentation/notice is centered in the selected working area");
   check(WorkProgressWindow.CenterWithin(new Rectangle(-1920,0,1920,1080),new Size(440,190))==new Point(-1180,445),"presentation/notice centering supports monitors with a negative screen origin");
+  var capture=new Rectangle(435,250,1050,561);var position=WorkProgressWindow.OutsideObservation(new[]{new Rectangle(0,0,1920,1040)},new Size(440,190),capture);
+  check(position.HasValue&&!new Rectangle(position.Value,new Size(440,190)).IntersectsWith(capture),"presentation/progress docks outside security capture instead of hide/show polling");
+  check(!WorkProgressWindow.OutsideObservation(new[]{new Rectangle(0,0,350,200)},new Size(440,190),new Rectangle(0,0,350,200)).HasValue,"presentation/no room returns a stable tray-only fallback");
   IntPtr original=new IntPtr(-301),work=new IntPtr(-302),current=work;int activations=0,observations=0;
   var kept=new ForegroundReturn(original,()=>current,h=>true,h=>{activations++;current=h;return true;},true);kept.Own(work);
   var reasons=new List<ForegroundReturnOutcome>();
@@ -51,6 +54,9 @@ internal static class PresentationTests {
    IntPtr foreground=Native.GetForegroundWindow();form.Show();
    check(form.Visible&&Native.GetForegroundWindow()==foreground,"presentation/showing the real offscreen notice preserves the actual Windows foreground handle");
    form.UpdateProgress("TEST_SYSTEM_WAIT");
+   form.Location=new Point(-32000,-32000);int visibilityChanges=0;form.VisibleChanged+=(o,e)=>visibilityChanges++;
+   for(int i=0;i<5;i++)form.MoveOutsideObservation(capture);
+   check(visibilityChanges==0&&form.Visible,"presentation/repeated security observations do not hide or show an unobscuring notice");
    check(form.Controls.OfType<Label>().Any(l=>l.Text=="TEST_SYSTEM_WAIT")&&stops==0,"presentation/progress updates do not trigger submission or stop actions");
    check(Native.GetForegroundWindow()==foreground,"presentation/updating the notice does not activate it");
    form.SetPointerNoticeVisible(false);check(!form.Visible,"presentation/coordinate fallback can hide only the notice before resolving a click point");

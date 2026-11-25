@@ -2,7 +2,8 @@ using System;
 
 internal sealed class PreloginRecoveryFacts {
  internal bool TargetVerified,Blank,CertificateVisible,PasswordVisible,BlockingDialog,Pending,Cancelled,ReloadSupported;
- internal bool Safe {get{return TargetVerified&&Blank&&!CertificateVisible&&!PasswordVisible&&!BlockingDialog&&!Pending&&!Cancelled&&ReloadSupported;}}
+ internal SecurityLoadingState SecurityState;
+ internal bool Safe {get{return SecurityState==SecurityLoadingState.Clear&&TargetVerified&&Blank&&!CertificateVisible&&!PasswordVisible&&!BlockingDialog&&!Pending&&!Cancelled&&ReloadSupported;}}
 }
 // Boolean observations already used by recovery. No extra UI reads or actions.
 internal sealed class PreloginTraceData {

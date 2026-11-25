@@ -30,6 +30,7 @@ internal static partial class Portal {
  }
  internal static PreparedCertificateStorage SelectCertificateStorage(PortalContext initial,CertificateStorage location){
   CheckCancel();Validate(initial,LoginPath,false);
+  initial=WaitSecurity(workProfile);
   var dialog=Dialog(initial);if(dialog==null||dialog.Current.IsOffscreen)throw new SafeFailure("먼저 업무포털에서 인증서창을 열어 주세요.");
   var media=All(dialog,ControlType.Button).Where(b=>!b.Current.IsOffscreen&&b.Current.IsEnabled&&location.IsMediaName(b.Current.Name)).ToList();
   if(media.Count!=1)throw new SafeFailure("인증서 저장 매체 버튼을 하나로 확인하지 못했습니다. 암호를 입력하지 않습니다.");
@@ -40,7 +41,7 @@ internal static partial class Portal {
   if(!driveMenuOpen)Native.Click(media[0],initial.Hwnd,workProcess);
   if(location.Media==CertificateStorage.Removable){
    var choices=Wait(()=>{
-    var current=Locate(workProfile);if(current==null)return null;Validate(current,LoginPath,false);var shown=Dialog(current);if(shown==null)return null;
+    var current=Locate(workProfile);if(current==null)return null;Validate(current,LoginPath,false);if(!SecurityReady(current))return null;var shown=Dialog(current);if(shown==null)return null;
     var matches=shown.FindAll(TreeScope.Descendants,Condition.TrueCondition).Cast<AutomationElement>().Where(e=>!e.Current.IsPassword&&!e.Current.IsOffscreen&&e.Current.IsEnabled&&location.IsDriveName(e.Current.Name)).ToList();
     if(matches.Count==0)return null;
     // A caption may be exposed on both the clickable container and its text.
@@ -56,20 +57,21 @@ internal static partial class Portal {
   }
   var fresh=new FreshCertificateRows(previous);
   var prepared=Wait(()=>{
-   var current=Locate(workProfile);if(current==null)return null;Validate(current,LoginPath,false);
+   var current=Locate(workProfile);if(current==null)return null;Validate(current,LoginPath,false);if(!SecurityReady(current))return null;
    var keys=StorageRows(current);if(!fresh.Ready(keys))return null;
    return new PreparedCertificateStorage{Context=current,Location=location,DocumentKey=RuntimeKey(current.Doc),Rows=new HashSet<string>(keys),MediaDirect=mediaDirect,DriveDirect=driveDirect};
   },20000,"선택한 저장 위치의 새 인증서 목록을 확인하지 못했습니다. 이전 목록으로 암호를 입력하거나 다른 위치로 대신 진행하지 않습니다.");
   ValidatePreparedStorage(prepared);return prepared;
  }
- internal static void ValidatePreparedStorage(PreparedCertificateStorage prepared){
+ internal static void ValidatePreparedStorage(PreparedCertificateStorage prepared,bool requireSecurity=true){
   CheckCancel();var current=Locate(workProfile);
   if(current==null||current.Hwnd!=prepared.Context.Hwnd)throw new SafeFailure("등록 중인 인증서 업무 창이 바뀌었습니다.");
   Validate(current,LoginPath,false);
+  if(requireSecurity)FreshSecurity(current);
   if(RuntimeKey(current.Doc)!=prepared.DocumentKey||!prepared.Rows.SetEquals(StorageRows(current)))throw new SafeFailure("확인한 저장 위치의 인증서 목록이 바뀌었습니다. 위치와 인증서를 다시 확인해 주세요.");
  }
  internal static void ValidatePreparedCertificate(PreparedCertificateStorage prepared,CertificateInfo certificate){
-  ValidatePreparedStorage(prepared);var current=Locate(workProfile);var list=Id(Dialog(current),"kc_cert_list");
+  ValidatePreparedStorage(prepared,false);var current=Locate(workProfile);var list=Id(Dialog(current),"kc_cert_list");
   var selected=new Settings{CertUser=certificate.User,CertExpiry=certificate.Expiry,CertIssuer=certificate.Issuer};
   if(list==null||MatchingCertificateRows(list,selected).Count!=1)throw new SafeFailure("선택한 인증서 정보가 바뀌었거나 중복되어 저장하지 않았습니다. 다시 확인해 주세요.");
  }

@@ -59,6 +59,7 @@ internal sealed class StrictSession:IDisposable {
  void Prepare(){
   if(freshDialog||attempted)throw new SafeFailure("같은 시험에서 인증서창을 반복 생성하지 않습니다.");
   context=Current();Portal.Validate(context,Portal.LoginPath,false);
+  context=Portal.WaitSecurity(settings.Profile);
   var existing=Portal.Dialog(context);
    if(existing!=null&&!existing.Current.IsOffscreen){
    Stage("CLOSE_EXISTING_CERTIFICATE");
@@ -69,7 +70,7 @@ internal sealed class StrictSession:IDisposable {
    },10000,"기존 인증서창이 닫힌 것을 확인하지 못했어요.");
    Done("InvokePattern.Cancel");
   }
-  Stage("CREATE_CERTIFICATE_DIALOG");Invoke(Portal.Id(context.Doc,"btnLgn"));
+  context=Portal.WaitSecurity(settings.Profile);Stage("CREATE_CERTIFICATE_DIALOG");Portal.GuardPortalAction(hwnd);Invoke(Portal.Id(context.Doc,"btnLgn"));
   context=Portal.Wait(()=>{var c=Current();if(Portal.Dialog(c)==null)return null;try{return Portal.Certificates(c).Count>0?c:null;}catch(SafeFailure){return null;}},20000,"인증서 목록이 준비되지 않았어요.");
   freshDialog=true;Done("InvokePattern.Login");
  }
@@ -107,7 +108,7 @@ internal sealed class StrictSession:IDisposable {
   freshDialog=true;Done("DOM semantic login control + UIA dialog verification");
  }
  object Select(){
-  Stage("SELECT_CERTIFICATE");context=Current();var row=Portal.CertificateRow(context,settings);object p;
+  Stage("SELECT_CERTIFICATE");context=Portal.WaitSecurity(settings.Profile);var row=Portal.CertificateRow(context,settings);object p;Portal.GuardPortalAction(hwnd);
   if(row.TryGetCurrentPattern(SelectionItemPattern.Pattern,out p)){((SelectionItemPattern)p).Select();selectionMethod="SelectionItemPattern.Select";}
   else if(row.TryGetCurrentPattern(InvokePattern.Pattern,out p)){((InvokePattern)p).Invoke();selectionMethod="InvokePattern.Invoke";}
   else {selectionMethod="UIA-direct-selection-unavailable";Save();return new {directSelectionSupported=false,alreadySelected=(row.Current.Name??"").StartsWith("선택됨"),domSelectionRequired=true};}
@@ -125,7 +126,7 @@ internal sealed class StrictSession:IDisposable {
   OperationSafety.RequireResolved(settings.PendingAttempt);
   if(settings.CertStorageConfigured||settings.RegistrationPending)throw new SafeFailure("저장 위치를 등록한 인증서는 정상 업무 시작으로 진행해 주세요. 이 별도 진단은 암호를 입력하지 않습니다.");
   if(attempted||!freshDialog||!selected)throw new SafeFailure("새 인증서창과 선택 확인이 필요하며 로그인은 한 번만 시도합니다.");
-  context=Current();Portal.Validate(context,Portal.LoginPath,false);Portal.ConfirmSelectedCertificate(context,settings);
+  context=Portal.WaitSecurity(settings.Profile);Portal.Validate(context,Portal.LoginPath,false);Portal.ConfirmSelectedCertificate(context,settings);
   DateTime expiry;if(!DateTime.TryParse(settings.CertExpiry,out expiry)||expiry.Date<DateTime.Today)throw new SafeFailure("인증서 유효기간을 확인해 주세요.");
   var password=Portal.Password(context);
   object p;
@@ -134,13 +135,14 @@ internal sealed class StrictSession:IDisposable {
   var confirm=Button(context,"확인");object confirmPattern;if(!confirm.TryGetCurrentPattern(InvokePattern.Pattern,out confirmPattern))throw new SafeFailure("확인 버튼에 InvokePattern이 없습니다.");
    Action guard=()=>{
    audit.AssertBackground();
+   Portal.FinalAuthenticationGuard(context,settings,password);
    Portal.Validate(context,Portal.LoginPath,false);
    Portal.ConfirmSelectedCertificate(context,settings);
    if(!Automation.Compare(password,Portal.Password(context))||value.Current.IsReadOnly)throw new SafeFailure("보호된 입력 대상이 변경됐어요.");
   };
   guard();Stage("PASSWORD_DIRECT_SET");attempted=true;
   Portal.Input(()=>{settings.PendingAttempt=true;settings.Save();Save();},()=>Vault.SetDirect(settings.Target,secret=>value.SetValue(secret),guard));Done("ValuePattern.SetValue; no read-back");
-  Stage("CONFIRM_INVOKE");guard();Portal.SubmitOnce(()=>{submissions=1;Save();((InvokePattern)confirmPattern).Invoke();});Done("InvokePattern.Invoke once");
+  Stage("CONFIRM_INVOKE");guard();Portal.SubmitOnce(()=>{guard();var current=Portal.Confirmation(Current());object invoke;if(!current.TryGetCurrentPattern(InvokePattern.Pattern,out invoke))throw new SafeFailure("확인 버튼 상태가 바뀌었습니다.");submissions=1;Save();Portal.CheckCancel();((InvokePattern)invoke).Invoke();});Done("InvokePattern.Invoke once");
   Stage("LOGIN_RESPONSE");
    context=Portal.Wait(()=>{
    audit.AssertBackground();

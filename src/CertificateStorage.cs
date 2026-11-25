@@ -35,6 +35,9 @@ internal sealed class FreshCertificateRows {
 }
 
 internal static class CertificateRowData {
+ internal static string IdentityKey(string[] cells){
+  var parsed=Parse(cells);return parsed==null?String.Join("\u001f",cells??new string[0]):parsed.User+"\u001f"+parsed.Expiry+"\u001f"+parsed.Issuer;
+ }
  internal static CertificateInfo Parse(string[] cells){
   if(cells==null||cells.Length<4)return null;var names=cells.Select(value=>(value??"").Trim()).ToArray();
   string date=names.FirstOrDefault(value=>Regex.IsMatch(value,@"^\d{4}-\d{2}-\d{2}$"));DateTime expiry;

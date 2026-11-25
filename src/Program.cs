@@ -109,7 +109,7 @@ internal sealed class RegisterDialog:Form {
  }
  void SaveSecret(){try{
   var cert=certificates.SelectedItem as CertificateInfo;if(cert==null)throw new SafeFailure("인증서를 선택해 주세요.");
-  OperationSafety.RequireResolved(settings.PendingAttempt);validateLocation();validateCertificate(cert);
+  validateLocation();validateCertificate(cert);
   using(var a=first.SecurePassword)using(var b=second.SecurePassword){if(a.Length==0||!Vault.Equal(a,b))throw new SafeFailure("암호 두 칸의 입력이 일치하는지 확인해 주세요.");
    string oldTarget=settings.Target;string oldUser=settings.CertUser;
    var candidate=new Settings{CertUser=cert.User,CertExpiry=cert.Expiry,CertIssuer=cert.Issuer};
@@ -292,7 +292,7 @@ internal sealed class MainWindow:Form {
  }
  void CaptureSettings(){SelectionPreferences.Save(settings,neis.Checked,kedu.Checked,persistSelection);}
  void SetBusy(bool value){busy=value;foreach(var b in new[]{next,back,setup,options})b.Enabled=!value;neis.Enabled=kedu.Enabled=!value;UpdateTray();}
- void FinishProgress(){Native.PointerNoticeVisibility=visible=>{};if(workProgress!=null){workProgress.Finish();workProgress=null;}}
+ void FinishProgress(){Native.PointerNoticeVisibility=visible=>{};Native.SecurityObservationArea=area=>{};if(workProgress!=null){workProgress.Finish();workProgress=null;}}
   void Work(Action action,Action completed=null,bool showProgress=false){
   if(busy)return;
    try{
@@ -306,7 +306,7 @@ internal sealed class MainWindow:Form {
   SetBusy(true);
   System.ComponentModel.BackgroundWorker worker=null;
   try{
-   if(showProgress){workProgress=new WorkProgressWindow(RequestStop);workProgress.Show();Native.PointerNoticeVisibility=workProgress.SetPointerNoticeVisible;}
+   if(showProgress){workProgress=new WorkProgressWindow(RequestStop);workProgress.Show();Native.PointerNoticeVisibility=workProgress.SetPointerNoticeVisible;Native.SecurityObservationArea=workProgress.MoveOutsideObservation;}
    worker=new System.ComponentModel.BackgroundWorker();
    worker.DoWork+=(o,e)=>action();
     worker.RunWorkerCompleted+=(o,e)=>{
@@ -342,7 +342,6 @@ internal sealed class MainWindow:Form {
  void OpenPortal(){Work(()=>{var c=Portal.OpenForSetup(settings.Profile);Invoke((Action)(()=>ExplainCertificateStep(c.Path==Portal.MainPath)));});}
  internal void Register(){RegisterAt(null,null);}
  internal void RegisterAt(long? existingWindow,CertificateStorage requested){Work(()=>{
-  OperationSafety.RequireResolved(settings.PendingAttempt);
   PortalContext c;
   if(existingWindow.HasValue){Portal.BindProbeWindow(settings,existingWindow.Value);c=Portal.Locate(settings.Profile);}else c=Portal.OpenForRegistration(settings.Profile);
   if(c==null)throw new SafeFailure("등록할 업무포털 인증서 화면을 확인하지 못했습니다.");var d=Portal.Dialog(c);
@@ -360,10 +359,13 @@ internal sealed class MainWindow:Form {
    }
   }));
   if(location==null){Invoke((Action)(()=>SetStatus("저장 위치 선택을 취소했어요. 기존 등록은 유지합니다.")));return;}
-  var prepared=Portal.SelectCertificateStorage(c,location);var certs=Portal.Certificates(prepared.Context,true);
+  PreparedCertificateStorage prepared;System.Collections.Generic.List<CertificateInfo> certs;
+  Invoke((Action)(()=>Hide()));
+  try{prepared=Portal.SelectCertificateStorage(c,location);certs=Portal.Certificates(prepared.Context,true);}
+  finally{Invoke((Action)(()=>Show()));}
    Invoke((Action)(()=>{
    Activate();
-    using(var dialog=new RegisterDialog(settings,certs,location,()=>Portal.ValidatePreparedStorage(prepared),selected=>Portal.ValidatePreparedCertificate(prepared,selected))){
+    using(var dialog=new RegisterDialog(settings,certs,location,()=>Portal.ValidatePreparedStorage(prepared,false),selected=>Portal.ValidatePreparedCertificate(prepared,selected))){
    if(dialog.ShowDialog(this)==DialogResult.OK){step=SetupStep.Registered;UpdateGuide();SetStatus(location.Display+" 인증서와 암호를 저장했어요. '업무 시작'을 눌러 주세요.");RefreshCertificate();}
    else {step=SetupStep.Certificate;UpdateGuide();SetStatus("준비되면 암호 등록을 이어서 진행해 주세요.");}
   }}));

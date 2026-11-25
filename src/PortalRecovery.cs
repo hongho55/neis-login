@@ -20,6 +20,7 @@ internal static partial class Portal {
   bool ownTab=selected.Count==1&&String.Join("-",selected[0].GetRuntimeId())==workPortalTabKey;
    return new PreloginRecoveryFacts{
    TargetVerified=c.Hwnd==workWindow&&c.Path==LoginPath&&ownTab&&!Native.IsIconic(c.Hwnd),
+   SecurityState=ObserveSecurity(c).State,
    Blank=!content,
    CertificateVisible=certificate,
    PasswordVisible=password,
@@ -30,7 +31,9 @@ internal static partial class Portal {
   };
  }
  static bool TryRecoverBlank(Settings settings,PortalContext c,PreloginRecoveryGate gate,long now,PreloginStateTrace observation){
-  CheckCancel();Validate(c,LoginPath,false);var facts=RecoveryFacts(settings,c);
+  CheckCancel();Validate(c,LoginPath,false);
+  if(ObserveSecurity(c).State!=SecurityLoadingState.Clear){gate.TryClaim(new PreloginRecoveryFacts(),now);return false;}
+  var facts=RecoveryFacts(settings,c);
   observation.Observe(facts);
   if(!gate.TryClaim(facts,now))return false;
   var fresh=Locate(settings.Profile);if(fresh==null||fresh.Path!=LoginPath||!Automation.Compare(fresh.Doc,c.Doc))return false;
@@ -38,7 +41,7 @@ internal static partial class Portal {
   var reload=ReloadButton(fresh);
   object pattern;
   if(reload==null||!reload.TryGetCurrentPattern(InvokePattern.Pattern,out pattern))throw new SafeFailure("새로고침 직접 실행 기능이 없어 중단했습니다. 키 입력으로 대신 실행하지 않습니다.");
-  CheckCancel();if(settings.PendingAttempt)throw new SafeFailure("입력 결과 미확인 상태에서는 새로고침하지 않습니다.");
+  FreshSecurity(fresh);CheckCancel();if(settings.PendingAttempt)throw new SafeFailure("입력 결과 미확인 상태에서는 새로고침하지 않습니다.");
   RunTrace.Record(TraceEvent.PRELOGIN_REFRESH_REQUESTED,TraceStage.PRELOGIN_REFRESH);Report("인증 전 빈 로그인 화면 확인 · 새로고침 1회 후 준비를 기다립니다.");
   try{CheckCancel();((InvokePattern)pattern).Invoke();}
   catch(Exception ex){RunTrace.Record(TraceEvent.ERROR,TraceStage.PRELOGIN_REFRESH,ex);throw new SafeFailure("새로고침 실행 결과가 미확인이라 중단했습니다. 반복 새로고침이나 암호 입력은 하지 않습니다.");}

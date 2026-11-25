@@ -18,6 +18,7 @@ internal static partial class Portal {
  internal static PortalContext Prepare(string profile,bool allowCreate=true,Settings recoverySettings=null,bool waitForRows=true){
   Report("인증서창을 준비하고 있어요.");var c=EnsurePortal(profile,false,allowCreate);
   Validate(c,c.Path,false);if(c.Path==MainPath)throw new SafeFailure("현재 로그인되어 있습니다. 실제 암호 시험·등록 전 업무포털에서 직접 로그아웃해 주세요.");
+  c=WaitSecurity(profile);
   RunTrace.Record(TraceEvent.CERTIFICATE_OPEN_REQUEST,TraceStage.CERTIFICATE_DIALOG);
   var dialog=Dialog(c);
   if(dialog==null||dialog.Current.IsOffscreen){
@@ -30,13 +31,15 @@ internal static partial class Portal {
      recovery.TryClaim(new PreloginRecoveryFacts(),clock.ElapsedMilliseconds);
      return null;
     }
-    Validate(x,LoginPath,false);var shown=Dialog(x);if(shown!=null&&!shown.Current.IsOffscreen)return x;
+    Validate(x,LoginPath,false);
+    if(!SecurityReady(x)){stable.Observe(null,false,clock.ElapsedMilliseconds);recovery.TryClaim(new PreloginRecoveryFacts(),clock.ElapsedMilliseconds);return null;}
+    var shown=Dialog(x);if(shown!=null&&!shown.Current.IsOffscreen)return x;
     if(recoverySettings!=null&&TryRecoverBlank(recoverySettings,x,recovery,clock.ElapsedMilliseconds,observation)){stable.Observe(null,false,clock.ElapsedMilliseconds);return null;}
     var button=Id(x.Doc,"btnLgn");bool ready=button!=null&&button.Current.IsEnabled&&!button.Current.IsOffscreen;
     string identity=ready?String.Join("-",x.Doc.GetRuntimeId())+"/"+String.Join("-",button.GetRuntimeId()):null;
     return stable.Observe(identity,ready,clock.ElapsedMilliseconds)?x:null;
    },CertificateStartup.ButtonReadyTimeoutMs,"로그인 화면과 인증서 버튼이 안정된 상태를 확인하지 못했습니다. 암호를 입력하거나 버튼을 반복 실행하지 않았습니다.",TraceStage.CERTIFICATE_BUTTON_READY);
-   Validate(c,LoginPath,false);dialog=Dialog(c);
+   c=FreshSecurity(c);dialog=Dialog(c);
     if(dialog==null||dialog.Current.IsOffscreen){
     var login=Id(c.Doc,"btnLgn");
     if(login==null||!login.Current.IsEnabled||login.Current.IsOffscreen)throw new SafeFailure("인증서 로그인 버튼 상태가 바뀌어 중단했습니다. 암호를 입력하지 않았습니다.");
@@ -50,6 +53,7 @@ internal static partial class Portal {
    var x=Locate(profile);if(x==null||x.Path!=LoginPath){if(!missingRecorded){RunTrace.Record(TraceEvent.CERTIFICATE_DOCUMENT_MISSING,TraceStage.CERTIFICATE_DIALOG);missingRecorded=true;}return null;}
    if(!replacedRecorded&&String.Join("-",x.Doc.GetRuntimeId())!=requestedDocument){RunTrace.Record(TraceEvent.CERTIFICATE_DOCUMENT_REPLACED,TraceStage.CERTIFICATE_DIALOG);replacedRecorded=true;}
    Validate(x,LoginPath,false);
+   if(!SecurityReady(x))return null;
    var d=Dialog(x);
    if(d==null||d.Current.IsOffscreen)return null;
    var list=Id(d,"kc_cert_list");
@@ -75,16 +79,17 @@ internal static partial class Portal {
    return All(list,ControlType.DataItem).Where(r=>{
    var n=All(r,ControlType.DataItem).Select(x=>(x.Current.Name??"").Trim()).ToList();
    return n.Contains(s.CertUser)&&n.Contains(s.CertExpiry)&&n.Contains(s.CertIssuer);
-  }).ToList();
+  }).GroupBy(r=>CertificateRowData.IdentityKey(All(r,ControlType.DataItem).Select(x=>(x.Current.Name??"").Trim()).ToArray()))
+    .Select(g=>g.OrderByDescending(r=>(r.Current.Name??"").StartsWith("선택됨")).First()).ToList();
  }
  static PortalContext WaitRegisteredCertificate(Settings s,PortalContext initial){
   Report("인증서 목록을 불러오는 중 · 등록한 인증서 확인 대기");
   return Wait(()=>{
    var c=Locate(s.Profile);if(c==null){if(BoundWindow()==null)throw new SafeFailure("확인 중인 업무 창이 닫혔거나 바뀌었습니다. 다른 창에 입력하지 않습니다.");return null;}
    if(c.Hwnd!=initial.Hwnd)throw new SafeFailure("확인 중인 업무 창이 바뀌었습니다. 다른 창에 입력하지 않습니다.");
-   Validate(c,LoginPath,false);var dialog=Dialog(c);if(dialog==null||dialog.Current.IsOffscreen)return null;var list=Id(dialog,"kc_cert_list");if(list==null)return null;
+   Validate(c,LoginPath,false);if(!SecurityReady(c))return null;var dialog=Dialog(c);if(dialog==null||dialog.Current.IsOffscreen)return null;var list=Id(dialog,"kc_cert_list");if(list==null)return null;
    var matches=MatchingCertificateRows(list,s);
-   if(matches.Count>1)throw new SafeFailure("등록 정보가 같은 인증서가 여러 개 표시됩니다. 임의 선택하지 않고 중단합니다.");
+   if(matches.Count>1)throw new SafeFailure("등록 정보가 서로 다른 인증서로 여러 개 표시됩니다. 임의 선택하지 않고 중단합니다.");
    return matches.Count==1?c:null;
   },15000,"목록에서 등록한 이름·만료일·발급자가 일치하는 인증서를 확인하지 못했습니다. 인증서 위치와 표시된 목록을 확인해 주세요. 암호는 입력하지 않았습니다.",TraceStage.REGISTERED_CERTIFICATE);
  }
@@ -92,7 +97,7 @@ internal static partial class Portal {
   var list=Id(Dialog(c),"kc_cert_list");if(list==null)throw new SafeFailure("인증서 목록이 없어졌습니다.");
   var matches=MatchingCertificateRows(list,s);
   if(matches.Count==0)throw new SafeFailure(ReadCertificatesFromList(list).Count==0?"인증서 목록 행이 아직 준비되지 않았습니다. 암호를 입력하지 않습니다.":"현재 목록에 등록 정보가 일치하는 인증서가 보이지 않습니다. 인증서 위치를 확인해 주세요.");
-  if(matches.Count>1)throw new SafeFailure("등록 정보가 같은 인증서가 여러 개 표시됩니다. 임의 선택하지 않습니다.");return matches[0];
+  if(matches.Count>1)throw new SafeFailure("등록 정보가 서로 다른 인증서로 여러 개 표시됩니다. 임의 선택하지 않습니다.");return matches[0];
  }
  internal static void ConfirmSelectedCertificate(PortalContext c,Settings s){
   var row=CertificateRow(c,s);

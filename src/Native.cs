@@ -20,7 +20,7 @@ internal static class Native {
  [DllImport("user32.dll")]static extern bool BringWindowToTop(IntPtr h);
  [StructLayout(LayoutKind.Sequential)]internal struct POINT {internal int X,Y;}
  [DllImport("user32.dll")]static extern IntPtr WindowFromPoint(POINT point);
- [DllImport("user32.dll")]static extern IntPtr GetAncestor(IntPtr hwnd,uint flags);
+ [DllImport("user32.dll")]internal static extern IntPtr GetAncestor(IntPtr hwnd,uint flags);
  [DllImport("user32.dll")] internal static extern bool SetCursorPos(int x,int y);
  [DllImport("user32.dll")] internal static extern uint SendInput(uint n, INPUT[] p, int size);
  [StructLayout(LayoutKind.Sequential)] internal struct INPUT { internal uint type; internal INPUTUNION u; }
@@ -48,6 +48,7 @@ internal static class Native {
   if(SendInput(2,new[]{a,b},Marshal.SizeOf(typeof(INPUT)))!=2)throw new SafeFailure("암호 입력을 전달하지 못했습니다. 재입력하지 않습니다.");
  }
  internal static Action<bool> PointerNoticeVisibility=visible=>{};
+ internal static Action<System.Drawing.Rectangle> SecurityObservationArea=area=>{};
  internal static bool EnsureForeground(IntPtr hwnd,FocusPoint point,uint expectedProcess=0){
   uint expected=expectedProcess;if(expected==0)GetWindowThreadProcessId(hwnd,out expected);bool waited=false;
   Func<bool> valid=()=>{uint actual;GetWindowThreadProcessId(hwnd,out actual);return hwnd!=IntPtr.Zero&&expected!=0&&IsWindow(hwnd)&&actual==expected;};
@@ -70,7 +71,7 @@ internal static class Native {
   return acquired;
  }
  internal static void Click(AutomationElement e,IntPtr hwnd,uint expectedProcess=0) {
-  Portal.CheckCancel();uint observed;GetWindowThreadProcessId(hwnd,out observed);
+  Portal.CheckCancel();Portal.GuardPortalAction(hwnd);uint observed;GetWindowThreadProcessId(hwnd,out observed);
   if(!IsWindow(hwnd)||(expectedProcess!=0&&observed!=expectedProcess))throw new SafeFailure("대상 업무 창이 바뀌어 클릭하지 않습니다.");
   object p;
   if(e.TryGetCurrentPattern(InvokePattern.Pattern,out p)) {((InvokePattern)p).Invoke();return;}

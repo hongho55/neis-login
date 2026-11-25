@@ -19,6 +19,13 @@ internal static class CertificateStorageTests {
   check(validations==2&&writes.Count==2&&localWrites==1&&blockedDuringLocalWrite&&writes[0].RegistrationPending&&OldMetadata(writes[0]),"registration/persists blocked old metadata before the one local credential callback");
   check(success.CertUser==certificate.User&&success.CertExpiry==certificate.Expiry&&success.CertIssuer==certificate.Issuer&&success.CertMedia==CertificateStorage.Removable&&success.CertDrive=="D:"&&success.CertStorageConfigured&&!success.Verified&&!success.RegistrationPending&&!writes[1].RegistrationPending,"registration/success commits matching certificate and drive and requires a fresh verification");
   check(!success.AutoRunAtLogon&&!success.OpenNeis&&success.OpenKedu&&!success.PendingAttempt,"registration/success preserves startup behavior system choices and resolved input state");
+  var unresolved=RegistrationState();unresolved.PendingAttempt=true;bool pendingDuringWrite=false;
+  CertificateRegistration.Commit(unresolved,certificate,location,()=>{},()=>{},()=>pendingDuringWrite=unresolved.PendingAttempt);
+  check(pendingDuringWrite&&!unresolved.PendingAttempt&&!unresolved.RegistrationPending&&!unresolved.Verified,"registration/explicit registration accepts old pending and clears it only after saving new credentials");
+  var failedPending=RegistrationState();failedPending.PendingAttempt=true;int pendingWrites=0;
+  check(FailsToPersist(()=>CertificateRegistration.Commit(failedPending,certificate,location,()=>{},()=>{if(++pendingWrites==2)throw new IOException("TEST");},()=>{}))&&failedPending.PendingAttempt&&failedPending.RegistrationPending&&OldMetadata(failedPending),"registration/failed completion restores old unresolved attempt and blocks automatic login");
+  var cancelledPending=RegistrationState();cancelledPending.PendingAttempt=true;
+  check(Refuses(()=>CertificateRegistration.Commit(cancelledPending,certificate,location,()=>{throw new SafeFailure("cancelled");},()=>{},()=>{}))&&cancelledPending.PendingAttempt,"registration/cancelled validation never clears previous pending attempt");
 
   var firstFailure=RegistrationState();int firstPersists=0,firstLocalWrites=0;
   check(FailsToPersist(()=>CertificateRegistration.Commit(firstFailure,certificate,location,()=>{},()=>{firstPersists++;throw new IOException("TEST_FIRST_PERSIST");},()=>firstLocalWrites++))&&firstPersists==1&&firstLocalWrites==0&&firstFailure.RegistrationPending&&OldMetadata(firstFailure),"registration/initial persistence failure blocks all local credential writes and preserves old metadata");
@@ -44,6 +51,8 @@ internal static class CertificateStorageTests {
   check(CertificateRowData.Parse(new[]{"구분","사용자","만료일","발급자"})==null,"storage/fixed table header is never included in the certificate row refresh guard");
   var data=CertificateRowData.Parse(new[]{"개인","TEST_CERT","2099-12-31","TEST_ISSUER"});
   check(data!=null&&data.User=="TEST_CERT"&&data.Expiry=="2099-12-31"&&data.Issuer=="TEST_ISSUER","storage/certificate row parsing extracts the same identity used by selection guards");
+  check(CertificateRowData.IdentityKey(new[]{"개인","TEST_CERT","2099-12-31","TEST_ISSUER"})==CertificateRowData.IdentityKey(new[]{"개인","TEST_CERT","2099-12-31","TEST_ISSUER"}),"storage/identical duplicate certificate rows collapse to one logical identity");
+  check(CertificateRowData.IdentityKey(new[]{"개인","TEST_CERT","2099-12-31","TEST_ISSUER"})!=CertificateRowData.IdentityKey(new[]{"개인","OTHER","2099-12-31","TEST_ISSUER"}),"storage/different certificate identity remains distinct and guarded");
   check(CertificateRowData.Parse(new[]{"개인","TEST_CERT","2099-99-99","TEST_ISSUER"})==null,"storage/invalid dates cannot turn placeholders into certificate rows");
   const string originalTarget="TeacherWorkStart/gwe/593B0EA56F6ECA2B33BDAF6270C457A8BF125B6C97AE6B7A238007E04A8AECA1";
   var old=new JavaScriptSerializer().Deserialize<Settings>("{\"CertUser\":\"TEST_CERT\",\"CertExpiry\":\"2099-12-31\",\"CertIssuer\":\"TEST_ISSUER\",\"OpenNeis\":false,\"PendingAttempt\":true,\"Verified\":true}");

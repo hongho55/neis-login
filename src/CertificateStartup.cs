@@ -2,7 +2,10 @@ using System;
 
 internal static class CertificateStartup {
  internal const int ButtonReadyTimeoutMs=60000;
- internal const int ButtonStableMs=2000;
+ // The security gate already blocks while the actual security overlay is visible. Once
+ // that gate is clear, a shorter identity interval rejects stale UIA elements without
+ // adding a full two-second delay on every certificate-window start.
+ internal const int ButtonStableMs=500;
  internal const int DialogReadyTimeoutMs=60000;
 }
 

@@ -3,7 +3,7 @@ using System;
 internal static class CertificateStartupTests {
  internal static void Run(Action<bool,string> check){
   var stable=new StableElementObservation(CertificateStartup.ButtonStableMs);
-  check(!stable.Observe("DOC/BUTTON",true,0)&&!stable.Observe("DOC/BUTTON",true,1999)&&stable.Observe("DOC/BUTTON",true,2000),"certificate/same visible enabled document and button must remain stable for two seconds");
+  check(!stable.Observe("DOC/BUTTON",true,0)&&!stable.Observe("DOC/BUTTON",true,499)&&stable.Observe("DOC/BUTTON",true,500),"certificate/same visible enabled document and button must remain stable for post-security interval");
   var rebuilt=new StableElementObservation(5000);rebuilt.Observe("OLD/BUTTON",true,0);
   check(!rebuilt.Observe("NEW/BUTTON",true,4000)&&!rebuilt.Observe("NEW/BUTTON",true,8999)&&rebuilt.Observe("NEW/BUTTON",true,9000),"certificate/document rebuild restarts stabilization instead of clicking stale target");
   var disabled=new StableElementObservation(5000);disabled.Observe("DOC/BUTTON",true,0);disabled.Observe("DOC/BUTTON",false,4000);
@@ -15,6 +15,6 @@ internal static class CertificateStartupTests {
   var backwards=new StableElementObservation(5000);backwards.Observe("X",true,5000);
   check(!backwards.Observe("X",true,1000)&&backwards.Observe("X",true,6000),"certificate/regressing clock does not produce premature readiness");
   bool negative=false;try{new StableElementObservation(-1);}catch(ArgumentOutOfRangeException){negative=true;}
-  check(negative&&CertificateStartup.ButtonStableMs==2000&&CertificateStartup.ButtonReadyTimeoutMs==60000&&CertificateStartup.DialogReadyTimeoutMs==60000,"certificate/two-second stability retains sixty-second preparation and list limits");
+  check(negative&&CertificateStartup.ButtonStableMs==500&&CertificateStartup.ButtonReadyTimeoutMs==60000&&CertificateStartup.DialogReadyTimeoutMs==60000,"certificate/short post-security stability retains sixty-second preparation and list limits");
  }
 }

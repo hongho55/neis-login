@@ -28,21 +28,28 @@ internal static partial class Portal {
  }
  static void AuthenticateDirect(Settings s,PortalContext c,PreparedCertificateStorage storage=null){
   Validate(c,LoginPath,false);bool foreground=Native.EnsureForeground(c.Hwnd,FocusPoint.AUTHENTICATE_REQUEST,workProcess);
+  c=WaitSecurity(s.Profile);
   Validate(c,LoginPath,false);var row=CertificateRow(c,s);
   var password=Password(c);object pattern;
   if(!password.TryGetCurrentPattern(ValuePattern.Pattern,out pattern)||((ValuePattern)pattern).Current.IsReadOnly)throw new SafeFailure("암호칸 직접 입력을 사용할 수 없습니다. 다른 방식으로 자동 재시도하지 않습니다.");
   var value=(ValuePattern)pattern;
-  var buttons=All(Dialog(c),ControlType.Button).Where(b=>b.Current.Name=="확인"&&!b.Current.IsOffscreen&&b.Current.IsEnabled).ToList();object confirmation;
-  if(buttons.Count!=1||!buttons[0].TryGetCurrentPattern(InvokePattern.Pattern,out confirmation))throw new SafeFailure("확인 버튼의 직접 실행 기능을 확인하지 못했습니다. 암호를 입력하지 않습니다.");
   Report("등록한 인증서로 로그인 중입니다. 잠시만 기다려 주세요.");
   if(!foreground)ForegroundTrace.Sample(c.Hwnd,FocusPoint.DIRECT_CONTROL_FALLBACK);
   if(!(row.Current.Name??"").StartsWith("선택됨")){
+   FreshSecurity(c);
    object selection;if(row.TryGetCurrentPattern(SelectionItemPattern.Pattern,out selection))((SelectionItemPattern)selection).Select();
    else if(row.TryGetCurrentPattern(InvokePattern.Pattern,out selection))((InvokePattern)selection).Invoke();
    else throw new SafeFailure("등록 인증서 직접 선택이 지원되지 않습니다. 암호를 입력하지 않습니다.");
   }
+  c=WaitSecurity(s.Profile);
+  // Selection can rebuild the dialog. Acquire all input/submission elements again before input.
+  password=Password(c);
+  if(!password.TryGetCurrentPattern(ValuePattern.Pattern,out pattern)||((ValuePattern)pattern).Current.IsReadOnly)throw new SafeFailure("선택 후 암호 입력칸을 검증하지 못했습니다.");
+  value=(ValuePattern)pattern;
+  object confirmation;if(!Confirmation(c).TryGetCurrentPattern(InvokePattern.Pattern,out confirmation))throw new SafeFailure("확인 버튼의 직접 실행 기능을 확인하지 못했습니다. 암호를 입력하지 않습니다.");
    Action guard=()=>{
    CheckCancel();
+   FinalAuthenticationGuard(c,s,password);
    if(storage!=null)ValidatePreparedStorage(storage);
    Validate(c,LoginPath,false);
    ConfirmSelectedCertificate(c,s);
@@ -50,7 +57,8 @@ internal static partial class Portal {
   };
   try{
    guard();Input(()=>{s.PendingAttempt=true;s.Save();},()=>{AppState.Record("DIRECT_ELEMENT_INPUT_STARTED");Vault.SetDirect(s.Target,secret=>value.SetValue(secret),guard);guard();});
-   SubmitOnce(()=>{AppState.Record("DIRECT_ELEMENT_SUBMIT_ONCE");((InvokePattern)confirmation).Invoke();});
+   guard();
+   SubmitOnce(()=>{guard();var current=Confirmation(FreshSecurity(c));object invoke;if(!current.TryGetCurrentPattern(InvokePattern.Pattern,out invoke))throw new SafeFailure("제출 직전 확인 버튼이 바뀌었습니다.");AppState.Record("DIRECT_ELEMENT_SUBMIT_ONCE");CheckCancel();((InvokePattern)invoke).Invoke();});
   }finally{if(focusReturn!=null)ReturnFocus(FocusPoint.AUTH_INPUT_FINALLY_RETURN);}
   Report("로그인 응답 확인 중 · 자동으로 다시 제출하지 않습니다.");
   var loginFocus=new ForegroundWaitTrace();
@@ -81,11 +89,13 @@ internal static partial class Portal {
    if(direct)AuthenticateDirect(s,c,storage);
    else {
    Report("암호 입력·제출 동안 업무 창을 잠시 앞으로 가져옵니다.");c=EnsurePortal(s.Profile,true,false);Validate(c,LoginPath,true);
+   c=WaitSecurity(s.Profile);
    var row=CertificateRow(c,s);Native.Click(row,c.Hwnd,workProcess);Thread.Sleep(250);
    c=Wait(()=>Locate(s.Profile),5000,"업무포털 대상이 바뀌었습니다.");Validate(c,LoginPath,true);ConfirmSelectedCertificate(c,s);
-   var password=Password(c);password.SetFocus();Thread.Sleep(150);
+   c=WaitSecurity(s.Profile);var password=Password(c);FreshSecurity(c);password.SetFocus();Thread.Sleep(150);
     Action guard=()=>{
     CheckCancel();
+    FinalAuthenticationGuard(c,s,password);
     if(storage!=null)ValidatePreparedStorage(storage);
     if(Native.GetForegroundWindow()!=c.Hwnd)throw new SafeFailure("암호 입력 중 활성 창이 바뀌었습니다. 즉시 중단했습니다.");
     var focused=AutomationElement.FocusedElement;
@@ -105,7 +115,8 @@ internal static partial class Portal {
    ConfirmSelectedCertificate(c,s);
    var buttons=All(Dialog(c),ControlType.Button).Where(e=>e.Current.Name=="확인"&&!e.Current.IsOffscreen&&e.Current.IsEnabled).ToList();
    if(buttons.Count!=1)throw new SafeFailure("확인 버튼을 하나로 찾지 못했습니다. 제출하지 않습니다.");
-   SubmitOnce(()=>{Report("로그인 1회 제출. 응답 확인 중");Native.Click(buttons[0],c.Hwnd,workProcess);});
+   guard();
+   SubmitOnce(()=>{guard();var current=Confirmation(FreshSecurity(c));Report("로그인 1회 제출. 응답 확인 중");Native.Click(current,c.Hwnd,workProcess);});
    if(focusReturn!=null)ReturnFocus(FocusPoint.AUTH_INPUT_FINALLY_RETURN);
    c=Wait(()=>{var x=Locate(s.Profile);return x!=null&&x.Path==MainPath&&Id(x.Doc,"btn-logout")!=null?x:null;},45000,"로그인 성공을 확인하지 못했습니다. 입력 불허·암호 오류·응답 지연 등은 화면에서 구분해 주세요. 재제출하지 않았습니다.");
    Validate(c,MainPath,false);s.PendingAttempt=false;s.Verified=true;s.Save();Report("암호 자동 입력 및 업무포털 로그인 성공");

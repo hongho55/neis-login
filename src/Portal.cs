@@ -21,7 +21,7 @@ internal static partial class Portal {
  internal static string MainPath{get{return PortalConfig.Current.MainPath;}}
  static readonly OperationSafety operation=new OperationSafety();
  internal static bool Cancelled {get{return operation.Cancelled;}}
- internal static void BeginOperation(){operation.Begin();}
+ internal static void BeginOperation(){operation.Begin();securityGate=null;}
  internal static bool RequestStop(){return operation.RequestStop();}
  internal static void Input(Action persistPending,Action input){operation.Input(persistPending,input);}
  internal static void SubmitOnce(Action dispatch){operation.Submit(dispatch);}
@@ -39,7 +39,7 @@ internal static partial class Portal {
   internal static List<AutomationElement> All(AutomationElement e,ControlType t){
   return e.FindAll(TreeScope.Descendants,new PropertyCondition(AutomationElement.ControlTypeProperty,t)).Cast<AutomationElement>().ToList();
  }
- internal static AutomationElement Id(AutomationElement e,string id){return e.FindFirst(TreeScope.Descendants,new PropertyCondition(AutomationElement.AutomationIdProperty,id));}
+ internal static AutomationElement Id(AutomationElement e,string id){return e==null?null:e.FindFirst(TreeScope.Descendants,new PropertyCondition(AutomationElement.AutomationIdProperty,id));}
  internal static List<Tuple<IntPtr,AutomationElement>> Windows(){
   var result=new List<Tuple<IntPtr,AutomationElement>>();
    Native.EnumWindows((h,p)=>{
@@ -122,18 +122,27 @@ internal static partial class Portal {
  // Polling observes only. It never launches, selects a tab, or changes focus.
  internal static PortalContext Locate(string profile){
   CheckCancel();if(workProfile!=profile)return null;var window=BoundWindow();if(window==null)return null;
+  var candidates=new List<PortalContext>();
   foreach(var d in All(window.Item2,ControlType.Document)){
    Uri u;if(!Uri.TryCreate(DocUrl(d),UriKind.Absolute,out u))continue;
-   if((PortalConfig.Current.IsPortalUrl(u,LoginPath)||PortalConfig.Current.IsPortalUrl(u,MainPath))&&!d.Current.IsOffscreen)
-    return new PortalContext{Hwnd=window.Item1,Window=window.Item2,Doc=d,Path=u.AbsolutePath};
+   if((PortalConfig.Current.IsPortalUrl(u,LoginPath)||PortalConfig.Current.IsPortalUrl(u,MainPath))&&!d.Current.IsOffscreen&&DocumentBelongsToWindow(d,window.Item1))
+    candidates.Add(new PortalContext{Hwnd=window.Item1,Window=window.Item2,Doc=d,Path=u.AbsolutePath});
   }
-  return null;
+  // Chromium can temporarily expose more than one document. Never choose by tree order.
+  return candidates.Count==1?candidates[0]:null;
+ }
+ internal static bool DocumentBelongsToWindow(AutomationElement doc,IntPtr hwnd){
+  for(var current=doc;current!=null;current=TreeWalker.RawViewWalker.GetParent(current)){
+   int native=current.Current.NativeWindowHandle;
+   if(native!=0)return Native.GetAncestor(new IntPtr(native),2)==hwnd;
+  }
+  return false;
  }
  internal static T Wait<T>(Func<T> f,int milliseconds,string error,TraceStage? stage=null)where T:class {
   if(stage.HasValue)RunTrace.Record(TraceEvent.WAIT_BEGIN,stage,limitMs:milliseconds);
   try{
-   var sw=Stopwatch.StartNew();
-    while(sw.ElapsedMilliseconds<milliseconds){
+   var sw=Stopwatch.StartNew();long securityAtStart=SecurityPaused;
+    while(sw.ElapsedMilliseconds-(SecurityPaused-securityAtStart)<milliseconds){
     CheckCancel();
      try{
      T x=f();

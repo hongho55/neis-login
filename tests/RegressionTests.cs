@@ -159,11 +159,12 @@ internal static class RegressionTests {
   Check(s.PendingAttempt,"B02/new diagnostic session does not clear pending");s.PendingAttempt=false;OperationSafety.RequireResolved(s.PendingAttempt);Check(!s.PendingAttempt,"B02/explicitly resolved state may proceed to normal checks");
  }
  [STAThread]static int Main(string[] args){
+  if(args.Length==3&&args[0]=="--observe-security")return SecurityLoadingTests.Observe(Int64.Parse(args[1]),Int32.Parse(args[2]));
   if(args.Length==1&&args[0]=="--startup-tray-child")return StartupPreferencesTests.TrayChild();
   if(args.Length==1&&args[0]=="--quiet-hidden-guide")return QuietModeTests.HiddenGuideChild();
   if(args.Length==4&&args[0]=="--lease-child"){using(var lease=new InstanceLease(args[1])){if(!lease.Owned)return 2;InstallFiles.CopyAtomic(args[2],args[3]);return 0;}}
   string temp=Path.GetFullPath(Path.GetTempPath());root=Path.GetFullPath(Path.Combine(temp,"TeacherWorkStart-Regression-"+Guid.NewGuid().ToString("N")));Directory.CreateDirectory(root);
-  try{Baseline();Cancellation();LaunchRecovery();LogsAndSettings();SelectionEvents();Hotkeys();Installation();StrictPending();QuietModeTests.Run(Check);FastStartupTests.Run(Check,root);ExecutionTraceTests.Run(Check);CertificateStartupTests.Run(Check);PreloginRecoveryTests.Run(Check);StartupPreferencesTests.Run(Check,root);ForegroundTraceTests.Run(Check);PresentationTests.Run(Check);ForegroundRecoveryTests.Run(Check);SystemLaunchRequestTests.Run(Check);CertificateStorageTests.Run(Check);PortalConfigTests.Run(Check,root);DiagnosticsBundleTests.Run(Check,root);Console.WriteLine("PASS "+count+" regression checks; no real credentials, browser login, user settings or Startup writes");return 0;}
+  try{Baseline();Cancellation();LaunchRecovery();LogsAndSettings();SelectionEvents();Hotkeys();Installation();StrictPending();QuietModeTests.Run(Check);FastStartupTests.Run(Check,root);ExecutionTraceTests.Run(Check);CertificateStartupTests.Run(Check);SecurityLoadingTests.Run(Check);PreloginRecoveryTests.Run(Check);StartupPreferencesTests.Run(Check,root);ForegroundTraceTests.Run(Check);PresentationTests.Run(Check);ForegroundRecoveryTests.Run(Check);SystemLaunchRequestTests.Run(Check);CertificateStorageTests.Run(Check);PortalConfigTests.Run(Check,root);DiagnosticsBundleTests.Run(Check,root);Console.WriteLine("PASS "+count+" regression checks; no real credentials, browser login, user settings or Startup writes");return 0;}
   catch(Exception e){Console.WriteLine("FAIL: "+e.GetType().Name+" "+e.Message);return 1;}
   finally{if(root.StartsWith(temp.TrimEnd(Path.DirectorySeparatorChar)+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)&&Path.GetFileName(root).StartsWith("TeacherWorkStart-Regression-"))Directory.Delete(root,true);}
  }

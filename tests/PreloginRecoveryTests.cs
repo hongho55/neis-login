@@ -3,11 +3,16 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Web.Script.Serialization;
 internal static class PreloginRecoveryTests {
- static PreloginRecoveryFacts Ready(){return new PreloginRecoveryFacts{TargetVerified=true,Blank=true,ReloadSupported=true};}
+ static PreloginRecoveryFacts Ready(){return new PreloginRecoveryFacts{SecurityState=SecurityLoadingState.Clear,TargetVerified=true,Blank=true,ReloadSupported=true};}
  internal static void Run(Action<bool,string> check){
   var gate=new PreloginRecoveryGate();
   check(!gate.TryClaim(Ready(),0)&&!gate.TryClaim(Ready(),9999)&&gate.TryClaim(Ready(),10000),"recovery/verified blank must persist ten seconds before refresh claim");
   check(!gate.TryClaim(Ready(),20000)&&!gate.TryClaim(Ready(),100000),"recovery/claimed refresh cannot repeat even if dispatch failed or outcome is unknown");
+  foreach(var security in new[]{SecurityLoadingState.Loading,SecurityLoadingState.Unknown}){
+   var blockedGate=new PreloginRecoveryGate();var f=Ready();blockedGate.TryClaim(f,0);f.SecurityState=security;
+   check(!blockedGate.TryClaim(f,10000)&&!blockedGate.TryClaim(f,120000),"recovery/security "+security+" blocks blank refresh even after long wait");
+   check(!blockedGate.TryClaim(Ready(),120001)&&blockedGate.TryClaim(Ready(),130001),"recovery/security "+security+" resets blank persistence before clear");
+  }
   foreach(string blocked in new[]{"target","content","certificate","password","dialog","pending","cancelled","unsupported"}){
    var g=new PreloginRecoveryGate();g.TryClaim(Ready(),0);var f=Ready();
    if(blocked=="target")f.TargetVerified=false;if(blocked=="content")f.Blank=false;if(blocked=="certificate")f.CertificateVisible=true;if(blocked=="password")f.PasswordVisible=true;if(blocked=="dialog")f.BlockingDialog=true;if(blocked=="pending")f.Pending=true;if(blocked=="cancelled")f.Cancelled=true;if(blocked=="unsupported")f.ReloadSupported=false;
